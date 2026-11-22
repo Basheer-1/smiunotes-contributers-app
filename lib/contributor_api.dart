@@ -105,8 +105,16 @@ class ContributorApi {
         'refresh_token': next.refreshToken,
       }));
     } catch (_) {
-      session = null;
-      await _vault.delete(key: _key);
+      // Authentication already created a server session. If contributor
+      // authorization fails, revoke it rather than consuming a device slot.
+      try {
+        await request('/api/mobile/v1/session', body: {'op': 'logout'});
+      } catch (_) {
+        // Backend might be unavailable. Never retain a rejected token locally.
+      } finally {
+        session = null;
+        await _vault.delete(key: _key);
+      }
       rethrow;
     }
   }
