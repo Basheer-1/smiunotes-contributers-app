@@ -2,40 +2,35 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smiunotes_contributers_app/contributor_navigation.dart';
 
 void main() {
-  test('Contributor workspace is HTTPS and within allowed routes', () {
-    final url = Uri.https('smiunotes.com', '/staff');
-    expect(url.scheme, 'https');
-    expect(ContributorNavigation.classify(url.toString()),
-        ContributorDestination.internal);
-  });
-
-  test('Contributors can use existing login and recovery', () {
-    for (final path in ['/login', '/auth/callback', '/account-recovery', '/profile']) {
+  test('Approved SMIUNotes paths remain within the contributor shell', () {
+    for (final path in ['/verify', '/login', '/staff', '/staff/notes/new',
+      '/staff/notes/abc', '/profile', '/notifications', '/auth/callback']) {
       expect(ContributorNavigation.classify('https://smiunotes.com$path'),
           ContributorDestination.internal);
     }
   });
 
-  test('Admin, updater and unrelated website pages stay outside app', () {
-    for (final path in ['/admin', '/updates', '/editor', '/', '/staffing']) {
+  test('Administrative and editing routes are unavailable in the shell', () {
+    for (final path in ['/admin', '/updates', '/editor', '/staffing',
+      '/api/staff', '/community']) {
       expect(ContributorNavigation.classify('https://smiunotes.com$path'),
           ContributorDestination.blocked);
     }
   });
 
-  test('Host confusion and nonsecure URLs cannot open internally', () {
-    expect(ContributorNavigation.classify('https://smiunotes.com.evil.test/staff'),
+  test('External links must be opened outside the WebView', () {
+    expect(ContributorNavigation.classify('https://example.com'),
         ContributorDestination.external);
-    expect(ContributorNavigation.classify('http://smiunotes.com/staff'),
-        ContributorDestination.blocked);
-    expect(ContributorNavigation.classify('javascript:alert(1)'),
-        ContributorDestination.blocked);
+    expect(ContributorNavigation.classify('mailto:test@example.com'),
+        ContributorDestination.external);
   });
 
-  test('External HTTPS and mail links open outside the app', () {
-    expect(ContributorNavigation.classify('https://example.com/document'),
-        ContributorDestination.external);
-    expect(ContributorNavigation.classify('mailto:help@example.com'),
-        ContributorDestination.external);
+  test('Unsafe URL forms are blocked', () {
+    for (final url in ['http://smiunotes.com/staff',
+      'javascript:alert(1)', 'https://name@smiunotes.com/staff',
+      'file:///etc/passwd', 'not a uri']) {
+      expect(ContributorNavigation.classify(url),
+          ContributorDestination.blocked);
+    }
   });
 }
