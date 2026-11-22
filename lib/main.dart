@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'contributor_navigation.dart';
 
 void main() => runApp(const ContributorsApp());
 
@@ -65,21 +66,15 @@ class _ContributorWorkspaceState extends State<ContributorWorkspace> {
           }
         },
         onNavigationRequest: (request) {
-          final uri = Uri.tryParse(request.url);
-          if (uri == null) return NavigationDecision.prevent;
-          if (uri.scheme == 'https' &&
-              (uri.host == 'smiunotes.com' || uri.host == 'www.smiunotes.com')) {
-            final path = uri.path;
-            if (path == '/staff' || path.startsWith('/staff/') ||
-                path == '/login' || path.startsWith('/login/') ||
-                path.startsWith('/auth/') ||
-                path.startsWith('/account-recovery') ||
-                path.startsWith('/profile') || path.startsWith('/privacy')) {
-              return NavigationDecision.navigate;
-            }
+          final destination = ContributorNavigation.classify(request.url);
+          if (destination == ContributorDestination.internal) {
+            return NavigationDecision.navigate;
           }
-          if (uri.scheme == 'https' || uri.scheme == 'mailto') {
-            launchUrl(uri, mode: LaunchMode.externalApplication);
+          if (destination == ContributorDestination.external) {
+            final uri = Uri.tryParse(request.url);
+            if (uri != null) {
+              launchUrl(uri, mode: LaunchMode.externalApplication);
+            }
           }
           return NavigationDecision.prevent;
         },
