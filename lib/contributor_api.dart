@@ -25,16 +25,18 @@ class ContributorApi {
   ContributorSession? session;
 
   Future<Map<String, dynamic>> request(String path,
-      {Map<String, dynamic>? body, bool authenticate = true}) async {
+      {Map<String, dynamic>? body, bool authenticate = true,
+       String method = 'GET'}) async {
     final uri = Uri.parse(apiOrigin).resolve(path);
     if (uri.scheme != 'https' || uri.host != 'smiunotes.com') {
       throw const FormatException('Untrusted API endpoint');
     }
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
     try {
-      final request = body == null
-          ? await client.getUrl(uri).timeout(const Duration(seconds: 15))
-          : await client.postUrl(uri).timeout(const Duration(seconds: 15));
+      final request = await client.openUrl(
+        method == 'GET' && body != null ? 'POST' : method == 'GET' && body == null
+          ? 'GET' : method,
+        uri).timeout(const Duration(seconds: 15));
       request.followRedirects = false;
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       if (authenticate) {
@@ -135,6 +137,16 @@ class ContributorApi {
   Future<void> createDraft(String title, String description, String subjectId) async {
     await request('/api/mobile/v1/contributor-workspace',
         body: {'title': title, 'description': description, 'subject_id': subjectId});
+  }
+
+  Future<void> updateDraft(String id, String title, String description,
+      String subjectId) async {
+    await request('/api/mobile/v1/contributor-notes/$id', method: 'PATCH',
+      body: {'title': title, 'description': description, 'subject_id': subjectId});
+  }
+
+  Future<void> deleteDraft(String id) async {
+    await request('/api/mobile/v1/contributor-notes/$id', method: 'DELETE');
   }
 
   Future<void> signOut() async {
