@@ -98,14 +98,21 @@ class _ContributorHomeState extends State<ContributorHome> {
 
   String _safeError(Object error) {
     final message = error.toString().replaceFirst(RegExp(r'^(HttpException|Bad state): ?'), '');
-    if (message.contains('403') ||
-        message.contains('Approved contributor access required')) {
-      return 'Only active, approved contributors can use this app.';
+    if (message.contains('Contributor API is not deployed')) {
+      return 'Sign-in was accepted, but the Contributors backend is not deployed yet. Please update the app after the server fix.';
+    }
+    if (message.contains('Approved contributor access required') ||
+        message.contains('Contributor access required')) {
+      return 'Contributor workspace access requires an approved contributor or site administrator account.';
     }
     if (message.contains('Mobile login is currently disabled')) {
       return 'Mobile sign-in is not enabled on the server.';
     }
-    return 'Unable to complete this request. Check your connection or account access.';
+    if (message.contains('Invalid credentials') ||
+        message.contains('Security verification required')) {
+      return 'Sign-in failed. Check your credentials or security challenge.';
+    }
+    return 'Unable to connect to the Contributors service. Please retry or check availability.';
   }
 
   Future<void> _refresh() async {
@@ -512,7 +519,7 @@ class _ContributorHomeState extends State<ContributorHome> {
         ('Student ID', profile['student_id']?.toString() ?? '-'),
         ('Department', profile['department']?.toString() ?? '-'),
         ('Semester', scope['semester']?.toString() ?? '-'),
-        ('Role', 'Approved contributor'),
+        ('Role', scope['role'] == 'admin' ? 'Administrator' : 'Approved contributor'),
       ])
         Card(child: ListTile(title: Text(data.$1),
           subtitle: Text(data.$2))),
