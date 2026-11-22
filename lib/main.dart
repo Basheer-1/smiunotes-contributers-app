@@ -562,14 +562,20 @@ class _ContributorHomeState extends State<ContributorHome> {
                   ],
                 ),
               );
-              if (confirmed != true) return;
+              if (confirmed != true) {
+                return;
+              }
               try {
                 await api.clearNotifications();
                 final refreshed = await api.notifications();
-                if (mounted) setState(() => inbox = refreshed);
+                if (mounted) {
+                  setState(() => inbox = refreshed);
+                }
               } catch (_) {
-                if (mounted) setState(() => error =
-                    'Could not clear notifications. Please retry.');
+                if (mounted) {
+                  setState(() => error =
+                      'Could not clear notifications. Please retry.');
+                }
               }
             },
             icon: const Icon(Icons.delete_sweep_outlined),
