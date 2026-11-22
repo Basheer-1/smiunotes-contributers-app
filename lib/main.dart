@@ -372,6 +372,56 @@ class _ContributorHomeState extends State<ContributorHome> {
                 ),
               if (status == 'draft') ...[
                 const SizedBox(height: 10),
+                TextButton.icon(
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    final noteId = note['id']?.toString() ?? '';
+                    if (noteId.isEmpty) return;
+                    final uploader = ContributorPdfUploader(api);
+                    try {
+                      final exists = await uploader.originalExists(noteId);
+                      if (!mounted) return;
+                      if (!exists) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('This draft has no original PDF.')));
+                        return;
+                      }
+                      final approved = await showDialog<bool>(
+                        context: context,
+                        builder: (dialog) => AlertDialog(
+                          title: const Text('Remove original PDF?'),
+                          content: const Text(
+                            'Only your private draft can be changed. '
+                            'If you have converted pages, reset that conversion first. '
+                            'After removing the PDF, upload the replacement separately.'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(dialog, false),
+                              child: const Text('Cancel')),
+                            FilledButton(onPressed: () => Navigator.pop(dialog, true),
+                              child: const Text('Remove PDF')),
+                          ],
+                        ),
+                      );
+                      if (approved != true) return;
+                      await uploader.removeOriginal(noteId);
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Original removed. You can upload a replacement.')));
+                      await _refresh();
+                    } catch (_) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text(
+                            'Could not remove PDF. Reset conversion first or retry.')));
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.remove_circle_outline),
+                  label: const Text('Remove original to replace'),
+                ),
+              ],
+              if (status == 'draft') ...[
+                const SizedBox(height: 10),
                 OutlinedButton.icon(
                   onPressed: () {
                     Navigator.of(context).pop();
