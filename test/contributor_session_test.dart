@@ -14,6 +14,16 @@ void main() {
     expect(session.refreshToken.startsWith('refresh_'), isTrue);
   });
 
+  test('Temporary backend failures never classify as revoked credentials', () {
+    for (final status in [404, 408, 429, 500, 502, 503, 504]) {
+      expect(contributorCredentialsRevoked(status), isFalse,
+          reason: 'HTTP $status must preserve encrypted login');
+    }
+    for (final status in [400, 401, 403]) {
+      expect(contributorCredentialsRevoked(status), isTrue);
+    }
+  });
+
   test('Missing or malformed session response fails closed', () {
     for (final response in [
       <String, dynamic>{},
