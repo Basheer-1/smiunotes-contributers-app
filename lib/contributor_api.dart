@@ -256,6 +256,12 @@ class ContributorApi {
         body: {'op': 'read', 'id': id});
   }
 
+  Future<int> clearNotifications() async {
+    final response = await request('/api/mobile/v1/notifications',
+        body: {'op': 'clear'});
+    return response['cleared'] is int ? response['cleared'] as int : 0;
+  }
+
   Future<void> createDraft(
       String title, String description, String subjectId) async {
     await request('/api/mobile/v1/contributor-workspace',
