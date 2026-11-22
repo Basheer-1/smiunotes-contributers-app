@@ -1,0 +1,68 @@
+name: Contributors Android QA APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'pubspec.yaml'
+      - 'android/**'
+      - '.github/workflows/android-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contributors-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.50.1'
+          channel: stable
+          cache: true
+      - name: Generate Android project files
+        run: |
+          flutter create --platforms=android --org com.smiunotes .
+          python3 - <<'PY'
+          from pathlib import Path
+          path=Path('android/app/src/main/AndroidManifest.xml')
+          raw=path.read_text()
+          if 'android.permission.INTERNET' not in raw:
+              raw=raw.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1)
+          raw=raw.replace('android:label="smiunotes_contributers_app"', 'android:label="SMIUNotes Contributors"')
+          path.write_text(raw)
+          PY
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - name: Build debug Android APK
+        run: flutter build apk --debug
+      - name: Provide checksum and provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s build/app/outputs/flutter-apk/app-debug.apk
+          printf 'SMIUNotes CONTRIBUTORS QA DEBUG\nCommit: %s\nBackend: https://smiunotes.com\nSigning: Android debug signing (not production)\n' "$GITHUB_SHA" > build/app/outputs/flutter-apk/BUILD-INFO.txt
+          (cd build/app/outputs/flutter-apk && sha256sum app-debug.apk > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smiunotes-contributors-debug-apk
+          path: |
+            build/app/outputs/flutter-apk/app-debug.apk
+            build/app/outputs/flutter-apk/BUILD-INFO.txt
+            build/app/outputs/flutter-apk/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
