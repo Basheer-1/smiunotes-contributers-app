@@ -5,28 +5,35 @@ import 'contributor_navigation.dart';
 
 void main() => runApp(const ContributorsApp());
 
-/// Authentication and contributor authorization must be enforced by the
-/// production website. Client-side navigation is not a security boundary.
+const _blue = Color(0xFF1F527E);
+const _ink = Color(0xFF132E49);
+const _pages = <String>[
+  '/staff',
+  '/staff/notes/new',
+  '/staff?status=draft',
+  '/profile',
+  '/notifications',
+];
+
 class ContributorsApp extends StatelessWidget {
   const ContributorsApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'SMIUNotes Contributors',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF326B8C)),
-        scaffoldBackgroundColor: const Color(0xFF111E2C),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF182B3D),
-          foregroundColor: Colors.white,
-        ),
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'SMIUNotes Contributors',
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(seedColor: _blue),
+      scaffoldBackgroundColor: const Color(0xFFF0F5F9),
+      appBarTheme: const AppBarTheme(
+        elevation: 0,
+        backgroundColor: Color(0xFFF0F5F9),
+        foregroundColor: _ink,
       ),
-      home: const ContributorWorkspace(),
-    );
-  }
+    ),
+    home: const ContributorWorkspace(),
+  );
 }
 
 class ContributorWorkspace extends StatefulWidget {
@@ -37,40 +44,53 @@ class ContributorWorkspace extends StatefulWidget {
 }
 
 class _ContributorWorkspaceState extends State<ContributorWorkspace> {
-  static final Uri workspace = Uri.https('smiunotes.com', '/staff');
   late final WebViewController _controller;
+  int selected = 0;
   bool _loading = true;
-  String? _loadError;
+  String? _error;
   int _progress = 0;
+  bool _loginMode = true;
+
+  Uri get _start => Uri.https('smiunotes.com', '/verify');
 
   @override
   void initState() {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0xFF142436))
+      ..setBackgroundColor(const Color(0xFFF0F5F9))
       ..setNavigationDelegate(NavigationDelegate(
-        onPageStarted: (_) {
+        onPageStarted: (url) {
           if (!mounted) return;
-          setState(() { _loading = true; _loadError = null; });
+          final path = Uri.tryParse(url)?.path ?? '';
+          setState(() {
+            _loading = true;
+            _error = null;
+            _loginMode = path == '/verify' || path == '/login' ||
+                path.startsWith('/auth/');
+          });
         },
-        onProgress: (progress) {
-          if (mounted) setState(() => _progress = progress);
+        onProgress: (percent) {
+          if (mounted) setState(() => _progress = percent);
         },
-        onPageFinished: (_) {
-          if (mounted) setState(() => _loading = false);
+        onPageFinished: (url) {
+          if (!mounted) return;
+          setState(() => _loading = false);
         },
         onWebResourceError: (error) {
           if (error.isForMainFrame == true && mounted) {
-            setState(() { _loading = false; _loadError = error.description; });
+            setState(() {
+              _loading = false;
+              _error = error.description;
+            });
           }
         },
         onNavigationRequest: (request) {
-          final destination = ContributorNavigation.classify(request.url);
-          if (destination == ContributorDestination.internal) {
+          final decision = ContributorNavigation.classify(request.url);
+          if (decision == ContributorDestination.internal) {
             return NavigationDecision.navigate;
           }
-          if (destination == ContributorDestination.external) {
+          if (decision == ContributorDestination.external) {
             final uri = Uri.tryParse(request.url);
             if (uri != null) {
               launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -79,19 +99,29 @@ class _ContributorWorkspaceState extends State<ContributorWorkspace> {
           return NavigationDecision.prevent;
         },
       ))
-      ..loadRequest(workspace);
+      ..loadRequest(_start);
+  }
+
+  Future<void> _openTab(int index) async {
+    if (index < 0 || index >= _pages.length) return;
+    setState(() { selected = index; _error = null; });
+    await _controller.loadRequest(Uri.https('smiunotes.com', _pages[index].split('?').first,
+      _pages[index].contains('?') ? {'status': 'draft'} : null));
   }
 
   Future<void> _back() async {
     if (await _controller.canGoBack()) {
       await _controller.goBack();
     } else {
-      await _controller.loadRequest(workspace);
+      await _openTab(0);
     }
   }
 
+  Future<void> _refresh() => _controller.reload();
+
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -99,58 +129,84 @@ class _ContributorWorkspaceState extends State<ContributorWorkspace> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('SMIUNotes Contributors',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          titleSpacing: 14,
+          title: const Row(children: [
+            Icon(Icons.auto_stories_rounded, color: _blue, size: 25),
+            SizedBox(width: 9),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('SMIUNotes', style: TextStyle(fontSize: 19,
+                    fontWeight: FontWeight.w800)),
+                Text('Contributors Workspace',
+                    style: TextStyle(fontSize: 10, color: Color(0xFF64778A))),
+              ],
+            )),
+          ]),
           actions: [
             IconButton(
-              tooltip: 'Workspace home',
-              icon: const Icon(Icons.space_dashboard_outlined),
-              onPressed: () => _controller.loadRequest(workspace),
+              tooltip: 'Open login',
+              onPressed: () => _controller.loadRequest(_start),
+              icon: const Icon(Icons.account_circle_outlined),
             ),
             IconButton(
               tooltip: 'Refresh',
-              icon: const Icon(Icons.refresh),
-              onPressed: () => _controller.reload(),
+              onPressed: _refresh,
+              icon: const Icon(Icons.refresh_rounded),
             ),
           ],
         ),
-        body: Stack(
-          children: [
-            WebViewWidget(controller: _controller),
-            if (_loading)
-              Align(
-                alignment: Alignment.topCenter,
-                child: LinearProgressIndicator(
-                  value: _progress > 0 && _progress < 100 ? _progress / 100 : null,
-                ),
+        body: Stack(children: [
+          WebViewWidget(controller: _controller),
+          if (_loading)
+            Align(
+              alignment: Alignment.topCenter,
+              child: LinearProgressIndicator(
+                value: _progress > 0 && _progress < 100
+                    ? _progress / 100 : null,
               ),
-            if (_loadError != null)
-              ColoredBox(
-                color: const Color(0xFF111E2C),
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.wifi_off, color: Colors.white70, size: 44),
-                        const SizedBox(height: 12),
-                        const Text('Could not open the contributor workspace',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.white, fontSize: 16)),
-                        const SizedBox(height: 8),
-                        Text(_loadError!, textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.white70)),
-                        const SizedBox(height: 16),
-                        FilledButton(
-                          onPressed: () => _controller.reload(),
-                          child: const Text('Try again'),
-                        ),
-                      ],
+            ),
+          if (_error != null)
+            ColoredBox(
+              color: const Color(0xFFF0F5F9),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.cloud_off_outlined,
+                        color: colors.onSurfaceVariant, size: 50),
+                    const SizedBox(height: 14),
+                    const Text('Unable to load SMIUNotes',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 8),
+                    Text(_error!, textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: _refresh,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Try again'),
                     ),
-                  ),
+                  ]),
                 ),
               ),
+            ),
+        ]),
+        bottomNavigationBar: _loginMode ? null : NavigationBar(
+          height: 72,
+          selectedIndex: selected,
+          onDestinationSelected: _openTab,
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.dashboard_outlined),
+                selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
+            NavigationDestination(icon: Icon(Icons.upload_file_outlined),
+                selectedIcon: Icon(Icons.upload_file), label: 'Upload'),
+            NavigationDestination(icon: Icon(Icons.folder_copy_outlined),
+                selectedIcon: Icon(Icons.folder_copy), label: 'Notes'),
+            NavigationDestination(icon: Icon(Icons.person_outline),
+                selectedIcon: Icon(Icons.person), label: 'Profile'),
+            NavigationDestination(icon: Icon(Icons.notifications_none),
+                selectedIcon: Icon(Icons.notifications), label: 'Inbox'),
           ],
         ),
       ),
