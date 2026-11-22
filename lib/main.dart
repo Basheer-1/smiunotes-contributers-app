@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'contributor_api.dart';
 import 'contributor_challenge.dart';
 import 'contributor_pdf_uploader.dart';
+import 'contributor_conversion_page.dart';
 
 void main() => runApp(const ContributorsApp());
 
@@ -425,8 +426,28 @@ class _ContributorHomeState extends State<ContributorHome> {
                   label: const Text('Delete draft'),
                 ),
               ],
+              if (status == 'draft') ...[
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    await Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ContributorConversionPage(
+                          noteId: note['id'].toString(),
+                          noteTitle: note['title']?.toString() ?? 'Draft',
+                          api: api,
+                        ),
+                      ),
+                    );
+                    if (mounted) await _refresh();
+                  },
+                  icon: const Icon(Icons.auto_fix_high),
+                  label: const Text('Prepare watermarked pages'),
+                ),
+              ],
               const SizedBox(height: 10),
-              const Text('Watermarked page conversion is required before admin review.'),
+              const Text('All uploaded PDFs must be converted into private, watermarked pages before admin review.'),
             ]),
         ),
       ),
