@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -72,7 +72,7 @@ class _ContributorWorkspaceState extends State<ContributorWorkspace> {
             final path = uri.path;
             if (path == '/staff' || path.startsWith('/staff/') ||
                 path == '/login' || path.startsWith('/login/') ||
-                path.startsWith('/auth/') || path.startsWith('/auth/') ||
+                path.startsWith('/auth/') ||
                 path.startsWith('/account-recovery') ||
                 path.startsWith('/profile') || path.startsWith('/privacy')) {
               return NavigationDecision.navigate;
