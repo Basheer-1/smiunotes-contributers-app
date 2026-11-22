@@ -7,8 +7,8 @@ void main() {
       'refresh_token': 'no'}}), throwsFormatException);
     expect(() => ContributorSession.parse({'session': null}), throwsFormatException);
     final session = ContributorSession.parse({'session': {
-      'access_token': 'access_' + 'a' * 48,
-      'refresh_token': 'refresh_' + 'b' * 40,
+      'access_token': 'access_${'a' * 48}',
+      'refresh_token': 'refresh_${'b' * 40}',
     }});
     expect(session.accessToken.startsWith('access_'), isTrue);
     expect(session.refreshToken.startsWith('refresh_'), isTrue);
