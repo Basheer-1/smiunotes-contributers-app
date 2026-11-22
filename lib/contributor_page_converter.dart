@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 
 import 'contributor_api.dart';
+import 'contributor_pdf_uploader.dart';
 
 /// Native Android PDF -> watermarked WebP pipeline.
 /// Uses the existing note-media server verification and short-lived R2 URLs.
@@ -34,6 +35,9 @@ class ContributorPageConverter {
     final state = await status(noteId);
     if (state['render'] != null) {
       throw StateError('This draft already has conversion data. Reset it before retrying.');
+    }
+    if (!await ContributorPdfUploader(api).originalExists(noteId)) {
+      throw StateError('Upload the original PDF before preparing pages.');
     }
     final selection = await FilePicker.platform.pickFiles(
       type: FileType.custom,
