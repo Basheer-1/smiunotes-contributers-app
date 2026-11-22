@@ -21,6 +21,20 @@ jobs:
             -H 'Accept: application/json' \
             https://smiunotes.com/api/mobile/v1/auth > "$RUNNER_TEMP/mobile-auth.json"
           node -e 'const fs=require("fs");const o=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/mobile-auth.json"));if(o.enabled!==true) process.exit(1);console.log("PASS: production mobile auth enabled")'
+      - name: Verify native draft creation denies anonymous access
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl -sS -o "$RUNNER_TEMP/draft-denied.json" -w '%{http_code}' \
+            --max-time 20 --retry 2 --retry-delay 2 \
+            -H 'Content-Type: application/json' \
+            -d '{"title":"Untrusted draft","description":"Anonymous write test","subject_id":"00000000-0000-4000-8000-000000000001"}' \
+            https://smiunotes.com/api/mobile/v1/contributor-workspace)"
+          if [[ "$status" != "403" ]]; then
+            echo "FAIL: anonymous draft creation returned HTTP $status (expected 403)" >&2
+            exit 1
+          fi
+          echo "PASS: anonymous draft creation denied"
       - name: Verify workspace exists and denies anonymous access
         shell: bash
         run: |
