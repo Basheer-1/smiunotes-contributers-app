@@ -66,7 +66,9 @@ class ContributorApi {
           method: method);
     } on ContributorApiException catch (error) {
       if (!authenticate || error.status != 401 || session == null ||
-          path == '/api/mobile/v1/session') rethrow;
+          path == '/api/mobile/v1/session') {
+        rethrow;
+      }
       // The current access JWT may have expired. Serialize rotation, then
       // replay only once. Invalid/revoked refresh tokens clear this device.
       await _refresh();
