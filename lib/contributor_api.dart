@@ -5,6 +5,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 const apiOrigin = 'https://smiunotes.com';
 
+/// Only explicit authentication/authorization revocation should forget a saved login.
+bool contributorCredentialsRevoked(int status) =>
+    status == 400 || status == 401 || status == 403;
+
 class ContributorApiException implements Exception {
   const ContributorApiException(this.status, this.message);
   final int status;
@@ -162,7 +166,7 @@ class ContributorApi {
     } on ContributorApiException catch (error) {
       // A definite invalid/revoked session must be cleared. Connectivity,
       // rate limiting, or 5xx must NOT log the student out.
-      if (error.status == 400 || error.status == 401 || error.status == 403) {
+      if (contributorCredentialsRevoked(error.status)) {
         await _clear();
       }
       rethrow;
@@ -225,8 +229,8 @@ class ContributorApi {
       return true;
     } on ContributorApiException catch (error) {
       if (error.status == 401 || error.status == 403) {
-        // 401 already tried a refresh through request(). A 403 is a confirmed
-        // contributor privilege rejection, not a generic network outage.
+        // 401 already tried token rotation via request(); 403 is a confirmed
+        // contributor privilege rejection, not a connectivity issue.
         await _clear();
         return false;
       }
