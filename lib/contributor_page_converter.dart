@@ -33,7 +33,7 @@ class ContributorPageConverter {
     }
     final state = await status(noteId);
     if (state['render'] != null) {
-      throw const StateError('This draft already has conversion data. Reset it before retrying.');
+      throw StateError('This draft already has conversion data. Reset it before retrying.');
     }
     final selection = await FilePicker.platform.pickFiles(
       type: FileType.custom,
