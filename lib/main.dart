@@ -85,7 +85,7 @@ class _ContributorHomeState extends State<ContributorHome> {
       password.clear();
       setState(() { authenticated = true; workspace = result; selected = 0; });
     } catch (e) {
-      if (mounted) setState(() => error = _safeError(e));
+      if (mounted) { setState(() => error = _safeError(e)); }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -462,7 +462,7 @@ class _DraftComposerState extends State<_DraftComposer> {
     child: Padding(padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         DropdownButtonFormField<String>(
-          value: subject,
+          initialValue: subject,
           decoration: const InputDecoration(labelText: 'Subject'),
           items: widget.subjects.map((s) => DropdownMenuItem(
             value: s['id'] as String,
