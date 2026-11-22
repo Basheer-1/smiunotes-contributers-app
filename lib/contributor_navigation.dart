@@ -1,11 +1,9 @@
-/// UI navigation rules for the contributor-only shell.
-///
-/// This is a UX restriction, NOT authorization. The SMIUNotes server must
-/// independently enforce active approved-contributor permissions.
+/// App-level navigation policy. This is NOT an authorization boundary.
+/// The website must authenticate and authorize every contributor operation.
 enum ContributorDestination { internal, external, blocked }
 
 class ContributorNavigation {
-  static const String host = 'smiunotes.com';
+  static const host = 'smiunotes.com';
 
   static ContributorDestination classify(String rawUrl) {
     final uri = Uri.tryParse(rawUrl);
@@ -13,29 +11,26 @@ class ContributorNavigation {
     if (uri.scheme == 'mailto' || uri.scheme == 'tel') {
       return ContributorDestination.external;
     }
-    if (uri.scheme != 'https') return ContributorDestination.blocked;
-
-    final normalizedHost = uri.host.toLowerCase();
-    if (normalizedHost != host && normalizedHost != 'www.$host') {
+    if (uri.scheme != 'https' || uri.userInfo.isNotEmpty) {
+      return ContributorDestination.blocked;
+    }
+    final hostname = uri.host.toLowerCase();
+    if (hostname != host && hostname != 'www.$host') {
       return ContributorDestination.external;
     }
-
     final path = uri.path;
-    if (_matches(path, '/staff') ||
-        _matches(path, '/login') ||
-        _matches(path, '/auth') ||
-        _matches(path, '/account-recovery') ||
-        _matches(path, '/forgot-password') ||
-        _matches(path, '/profile') ||
-        _matches(path, '/privacy')) {
-      return ContributorDestination.internal;
+    for (final prefix in const [
+      '/staff', '/verify', '/login', '/auth',
+      '/account-recovery', '/forgot-password',
+      '/profile', '/notifications', '/privacy',
+    ]) {
+      if (path == prefix || path.startsWith('$prefix/')) {
+        return ContributorDestination.internal;
+      }
     }
-
-    // Never navigate to /admin, /updates, /editor, or arbitrary website pages
-    // inside this focused app. Does not grant or revoke permissions.
+    // Website can briefly redirect signed-in users to home. Keep it
+    // reachable without exposing admin/editor navigation.
+    if (path == '/') return ContributorDestination.internal;
     return ContributorDestination.blocked;
   }
-
-  static bool _matches(String path, String prefix) =>
-      path == prefix || path.startsWith('$prefix/');
 }
