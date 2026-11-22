@@ -50,6 +50,10 @@ class ContributorApi {
       }
       final response = await request.close().timeout(const Duration(seconds: 25));
       if (response.isRedirect) throw const HttpException('Unexpected redirect.');
+      if (response.statusCode == 404) {
+        await response.drain<void>();
+        throw const HttpException('Contributor API is not deployed on this backend.');
+      }
       final bytes = <int>[];
       await for (final chunk in response.timeout(const Duration(seconds: 25))) {
         if (bytes.length + chunk.length > 524288) {
@@ -57,14 +61,19 @@ class ContributorApi {
         }
         bytes.addAll(chunk);
       }
-      final parsed = jsonDecode(utf8.decode(bytes));
-      if (parsed is! Map<String, dynamic>) {
-        throw const FormatException('Unexpected API response');
+      final raw = utf8.decode(bytes, allowMalformed: false);
+      Map<String, dynamic> parsed;
+      try {
+        final json = jsonDecode(raw);
+        if (json is! Map<String, dynamic>) throw const FormatException('Unexpected JSON');
+        parsed = json;
+      } on FormatException {
+        throw const HttpException('Backend returned an invalid response.');
       }
       if (response.statusCode < 200 || response.statusCode >= 300) {
         final message = parsed['error'];
         throw HttpException(message is String && message.length < 180
-            ? message : 'Request unavailable.');
+            ? message : 'Backend request unavailable.');
       }
       return parsed;
     } finally {
