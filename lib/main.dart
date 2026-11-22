@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'contributor_api.dart';
 import 'contributor_challenge.dart';
+import 'contributor_pdf_uploader.dart';
 
 void main() => runApp(const ContributorsApp());
 
@@ -334,7 +335,30 @@ class _ContributorHomeState extends State<ContributorHome> {
               const SizedBox(height: 8),
               Text(note['description']?.toString() ?? ''),
               const SizedBox(height: 20),
-              const Text('PDF conversion and draft editing require the next native media API.'),
+              if (status == 'draft')
+                FilledButton.icon(
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    try {
+                      final noteId = note['id']?.toString() ?? '';
+                      if (noteId.isEmpty) throw const FormatException('Missing note ID');
+                      await ContributorPdfUploader(api).chooseAndUpload(noteId);
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Original PDF uploaded and verified. Page conversion is still required before admin review.')));
+                      await _refresh();
+                    } catch (_) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('PDF upload was not completed. Check the file or retry.')));
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.picture_as_pdf_outlined),
+                  label: const Text('Choose and upload PDF'),
+                ),
+              const SizedBox(height: 10),
+              const Text('Watermarked page conversion is required before admin review.'),
             ]),
         ),
       ),
@@ -365,7 +389,7 @@ class _ContributorHomeState extends State<ContributorHome> {
             if (mounted) _changeTab(2);
           }),
       const SizedBox(height: 18),
-      const Text('After creating the draft, private PDF upload and page conversion will be enabled when the dedicated native media endpoint is ready.'),
+      const Text('After creating a draft, open it in Manage Notes to upload the original PDF. Watermarked page conversion remains a separate review step.'),
     ]);
   }
 
