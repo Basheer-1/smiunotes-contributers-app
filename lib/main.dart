@@ -376,7 +376,9 @@ class _ContributorHomeState extends State<ContributorHome> {
                   onPressed: () async {
                     Navigator.of(context).pop();
                     final noteId = note['id']?.toString() ?? '';
-                    if (noteId.isEmpty) return;
+                    if (noteId.isEmpty) {
+                      return;
+                    }
                     final uploader = ContributorPdfUploader(api);
                     try {
                       final exists = await uploader.originalExists(noteId);
@@ -402,7 +404,9 @@ class _ContributorHomeState extends State<ContributorHome> {
                           ],
                         ),
                       );
-                      if (approved != true) return;
+                      if (approved != true) {
+                        return;
+                      }
                       await uploader.removeOriginal(noteId);
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
