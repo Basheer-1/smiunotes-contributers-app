@@ -9,6 +9,20 @@ class ContributorPdfUploader {
   const ContributorPdfUploader(this.api);
   final ContributorApi api;
 
+  Future<bool> originalExists(String noteId) async {
+    final response = await api.request('/api/mobile/v1/contributor-media',
+        body: {'op': 'info', 'id': noteId});
+    return response['exists'] == true;
+  }
+
+  Future<void> removeOriginal(String noteId) async {
+    final response = await api.request('/api/mobile/v1/contributor-media',
+        body: {'op': 'remove', 'id': noteId});
+    if (response['ok'] != true) {
+      throw const FormatException('Could not remove original PDF.');
+    }
+  }
+
   Future<void> chooseAndUpload(String noteId) async {
     final selected = await FilePicker.platform.pickFiles(
       type: FileType.custom,
