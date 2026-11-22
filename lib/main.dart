@@ -1,4 +1,6 @@
+import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
+import 'contributor_avatar.dart';
 import 'contributor_api.dart';
 import 'contributor_challenge.dart';
 import 'contributor_pdf_uploader.dart';
@@ -45,6 +47,7 @@ class _ContributorHomeState extends State<ContributorHome> {
   String? error;
   Map<String, dynamic>? workspace;
   Map<String, dynamic>? inbox;
+  Future<Uint8List?>? avatarFuture;
   final id = TextEditingController(), password = TextEditingController();
 
   @override
@@ -142,7 +145,7 @@ class _ContributorHomeState extends State<ContributorHome> {
       if (mounted) {
         setState(() {
           busy = false; authenticated = false; workspace = null;
-          inbox = null; selected = 0;
+          inbox = null; avatarFuture = null; selected = 0;
         });
       }
     }
@@ -487,10 +490,22 @@ class _ContributorHomeState extends State<ContributorHome> {
     final scope = workspace?['upload_scope'] as Map<String, dynamic>? ?? {};
     return _scroll([
       _heading('Contributor profile', 'Your verified SMIUNotes identity'),
-      Center(child: CircleAvatar(radius: 38, child: Text(
-        (profile['student_name']?.toString().isNotEmpty == true
-          ? profile['student_name'].toString()[0] : 'C').toUpperCase(),
-        style: const TextStyle(fontSize: 30)))),
+      Center(child: FutureBuilder<Uint8List?>(
+        future: avatarFuture ??= ContributorAvatar(api).load(),
+        builder: (context, snapshot) {
+          final picture = snapshot.data;
+          return CircleAvatar(radius: 40,
+            backgroundImage: picture != null && picture.isNotEmpty
+              ? MemoryImage(picture) : null,
+            child: picture == null || picture.isEmpty
+              ? Text(
+                  (profile['student_name']?.toString().isNotEmpty == true
+                    ? profile['student_name'].toString()[0] : 'C').toUpperCase(),
+                  style: const TextStyle(fontSize: 30))
+              : null,
+          );
+        },
+      )),
       const SizedBox(height: 16),
       for (final data in <(String, String)>[
         ('Name', profile['student_name']?.toString() ?? '-'),
@@ -501,6 +516,13 @@ class _ContributorHomeState extends State<ContributorHome> {
       ])
         Card(child: ListTile(title: Text(data.$1),
           subtitle: Text(data.$2))),
+      const SizedBox(height: 12),
+      const Text('Contribution history', style: TextStyle(
+        fontSize: 19, fontWeight: FontWeight.w700)),
+      const SizedBox(height: 8),
+      ..._items('notes').take(10).map(_noteTile),
+      if (_items('notes').isEmpty)
+        const Card(child: ListTile(title: Text('No contributions yet'))),
       const SizedBox(height: 12),
       OutlinedButton.icon(onPressed: _signOut,
         icon: const Icon(Icons.logout), label: const Text('Sign out')),
