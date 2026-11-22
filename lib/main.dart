@@ -138,10 +138,12 @@ class _ContributorHomeState extends State<ContributorHome> {
     } catch (_) {
       // Local credentials have been cleared even if remote revoke fails.
     } finally {
-      if (mounted) setState(() {
-        busy = false; authenticated = false; workspace = null;
-        inbox = null; selected = 0;
-      });
+      if (mounted) {
+        setState(() {
+          busy = false; authenticated = false; workspace = null;
+          inbox = null; selected = 0;
+        });
+      }
     }
   }
 
