@@ -1,18 +1,29 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 const apiOrigin = 'https://smiunotes.com';
 
+class ContributorApiException implements Exception {
+  const ContributorApiException(this.status, this.message);
+  final int status;
+  final String message;
+  @override
+  String toString() => message;
+}
+
 class ContributorSession {
   const ContributorSession(this.accessToken, this.refreshToken);
   final String accessToken;
   final String refreshToken;
   factory ContributorSession.parse(Map<String, dynamic> json) {
-    final session = json['session'];
-    if (session is! Map<String, dynamic>) throw const FormatException('Invalid sign-in response');
-    final a = session['access_token'], r = session['refresh_token'];
-    if (a is! String || a.length < 30 || r is! String || r.length < 12) {
+    final raw = json['session'];
+    if (raw is! Map<String, dynamic>) {
+      throw const FormatException('Invalid sign-in response');
+    }
+    final a = raw['access_token'], r = raw['refresh_token'];
+    if (a is! String || a.length < 30 || r is! String || r.length < 20) {
       throw const FormatException('Invalid session');
     }
     return ContributorSession(a, r);
@@ -20,64 +31,141 @@ class ContributorSession {
 }
 
 class ContributorApi {
-  static const _vault = FlutterSecureStorage();
-  static const _key = 'smiunotes.contributor.session.v1';
-  ContributorSession? session;
+  ContributorApi({FlutterSecureStorage? storage})
+      : _vault = storage ?? const FlutterSecureStorage();
 
-  Future<Map<String, dynamic>> request(String path,
-      {Map<String, dynamic>? body, bool authenticate = true,
-       String method = 'GET'}) async {
+  static const _key = 'smiunotes.contributor.session.v1';
+  final FlutterSecureStorage _vault;
+  ContributorSession? session;
+  Future<void>? _refreshInFlight;
+
+  Future<void> _save(ContributorSession value) =>
+      _vault.write(key: _key, value: jsonEncode({
+        'version': 1,
+        'access_token': value.accessToken,
+        'refresh_token': value.refreshToken,
+      }));
+
+  Future<void> _clear() async {
+    session = null;
+    await _vault.delete(key: _key);
+  }
+
+  Future<Map<String, dynamic>> request(
+    String path, {
+    Map<String, dynamic>? body,
+    bool authenticate = true,
+    String method = 'GET',
+  }) async {
+    try {
+      return await _send(path, body: body, authenticate: authenticate,
+          method: method);
+    } on ContributorApiException catch (error) {
+      if (!authenticate || error.status != 401 || session == null ||
+          path == '/api/mobile/v1/session') rethrow;
+      // The current access JWT may have expired. Serialize rotation, then
+      // replay only once. Invalid/revoked refresh tokens clear this device.
+      await _refresh();
+      return _send(path, body: body, authenticate: authenticate, method: method);
+    }
+  }
+
+  Future<Map<String, dynamic>> _send(
+    String path, {
+    Map<String, dynamic>? body,
+    required bool authenticate,
+    required String method,
+  }) async {
     final uri = Uri.parse(apiOrigin).resolve(path);
-    if (uri.scheme != 'https' || uri.host != 'smiunotes.com') {
+    if (uri.scheme != 'https' || uri.host != 'smiunotes.com' ||
+        uri.userInfo.isNotEmpty) {
       throw const FormatException('Untrusted API endpoint');
     }
+    final actualMethod = method == 'GET' && body != null ? 'POST' : method;
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
     try {
-      final request = await client.openUrl(
-        method == 'GET' && body != null ? 'POST' : method == 'GET' && body == null
-          ? 'GET' : method,
-        uri).timeout(const Duration(seconds: 15));
+      final request = await client.openUrl(actualMethod, uri)
+          .timeout(const Duration(seconds: 15));
       request.followRedirects = false;
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       if (authenticate) {
         final token = session?.accessToken;
-        if (token == null) throw const HttpException('Sign-in required.');
+        if (token == null) {
+          throw const ContributorApiException(401, 'Sign-in required.');
+        }
         request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
       }
       if (body != null) {
         request.headers.contentType = ContentType.json;
         request.write(jsonEncode(body));
       }
-      final response = await request.close().timeout(const Duration(seconds: 25));
-      if (response.isRedirect) throw const HttpException('Unexpected redirect.');
+      final response = await request.close()
+          .timeout(const Duration(seconds: 25));
+      if (response.isRedirect) {
+        throw const ContributorApiException(502, 'Unexpected redirect.');
+      }
       if (response.statusCode == 404) {
         await response.drain<void>();
-        throw const HttpException('Contributor API is not deployed on this backend.');
+        throw const ContributorApiException(404,
+            'Contributor API is not deployed on this backend.');
       }
       final bytes = <int>[];
       await for (final chunk in response.timeout(const Duration(seconds: 25))) {
         if (bytes.length + chunk.length > 524288) {
-          throw const FormatException('Response too large');
+          throw const FormatException('Response too large.');
         }
         bytes.addAll(chunk);
       }
-      final raw = utf8.decode(bytes, allowMalformed: false);
       Map<String, dynamic> parsed;
       try {
-        final json = jsonDecode(raw);
-        if (json is! Map<String, dynamic>) throw const FormatException('Unexpected JSON');
-        parsed = json;
+        final decoded = jsonDecode(utf8.decode(bytes));
+        if (decoded is! Map<String, dynamic>) throw const FormatException();
+        parsed = decoded;
       } on FormatException {
-        throw const HttpException('Backend returned an invalid response.');
+        throw const ContributorApiException(502,
+            'Backend returned an invalid response.');
       }
       if (response.statusCode < 200 || response.statusCode >= 300) {
         final message = parsed['error'];
-        throw HttpException(message is String && message.length < 180
-            ? message : 'Backend request unavailable.');
+        throw ContributorApiException(response.statusCode,
+            message is String && message.length < 180
+                ? message : 'Backend request unavailable.');
       }
       return parsed;
     } finally {
       client.close(force: true);
+    }
+  }
+
+  Future<void> _refresh() {
+    final existing = _refreshInFlight;
+    if (existing != null) return existing;
+    final work = _rotate();
+    _refreshInFlight = work;
+    return work.whenComplete(() => _refreshInFlight = null);
+  }
+
+  Future<void> _rotate() async {
+    final old = session;
+    if (old == null) {
+      throw const ContributorApiException(401, 'Sign-in required.');
+    }
+    try {
+      final result = await _send('/api/mobile/v1/session',
+          authenticate: false, method: 'POST',
+          body: {'op': 'refresh', 'refreshToken': old.refreshToken});
+      final updated = ContributorSession.parse(result);
+      // Persist every rotation before any downstream workspace request:
+      // refresh tokens are single-use and must never be lost on app restart.
+      await _save(updated);
+      session = updated;
+    } on ContributorApiException catch (error) {
+      // A definite invalid/revoked session must be cleared. Connectivity,
+      // rate limiting, or 5xx must NOT log the student out.
+      if (error.status == 400 || error.status == 401 || error.status == 403) {
+        await _clear();
+      }
+      rethrow;
     }
   }
 
@@ -95,63 +183,75 @@ class ContributorApi {
         body: {'op': 'password', 'studentId': id.trim().toUpperCase(),
           'password': password, 'turnstileToken': challenge});
     final next = ContributorSession.parse(result);
-    // Authorization check precedes persistence; revoked or admin/editor
-    // accounts must never enter the contributor app.
     session = next;
     try {
+      // The server must authorize the contributor/admin before persistence.
       await workspace();
-      await _vault.write(key: _key, value: jsonEncode({
-        'access_token': next.accessToken,
-        'refresh_token': next.refreshToken,
-      }));
+      await _save(next);
     } catch (_) {
-      // Authentication already created a server session. If contributor
-      // authorization fails, revoke it rather than consuming a device slot.
       try {
-        await request('/api/mobile/v1/session', body: {'op': 'logout'});
+        await _send('/api/mobile/v1/session',
+            authenticate: true, method: 'POST', body: {'op': 'logout'});
       } catch (_) {
-        // Backend might be unavailable. Never retain a rejected token locally.
+        // Never retain tokens from a rejected initial login.
       } finally {
-        session = null;
-        await _vault.delete(key: _key);
+        await _clear();
       }
       rethrow;
     }
   }
 
   Future<bool> restore() async {
+    final encoded = await _vault.read(key: _key);
+    if (encoded == null) return false;
     try {
-      final stored = await _vault.read(key: _key);
-      if (stored == null) return false;
-      final data = jsonDecode(stored);
-      if (data is! Map<String, dynamic>) return false;
-      final refresh = data['refresh_token'];
-      if (refresh is! String || refresh.length < 12) return false;
-      final result = await request('/api/mobile/v1/session',
-          authenticate: false, body: {'op': 'refresh', 'refreshToken': refresh});
-      session = ContributorSession.parse(result);
-      await workspace();
-      await _vault.write(key: _key, value: jsonEncode({
-        'access_token': session!.accessToken,
-        'refresh_token': session!.refreshToken,
-      }));
-      return true;
-    } catch (_) {
-      session = null;
-      await _vault.delete(key: _key);
+      final data = jsonDecode(encoded);
+      if (data is! Map<String, dynamic>) throw const FormatException();
+      // Legacy installation saved the same fields without a version marker.
+      if (data['version'] != null && data['version'] != 1) {
+        throw const FormatException();
+      }
+      final tokens = ContributorSession.parse({'session': data});
+      session = tokens;
+    } on FormatException {
+      await _clear();
       return false;
+    }
+
+    try {
+      // Try the still-valid access JWT FIRST. Do not rotate refresh tokens
+      // unnecessarily on each app launch.
+      await workspace();
+      return true;
+    } on ContributorApiException catch (error) {
+      if (error.status == 401 || error.status == 403) {
+        // 401 already tried a refresh through request(). A 403 is a confirmed
+        // contributor privilege rejection, not a generic network outage.
+        await _clear();
+        return false;
+      }
+      // Offline/5xx/404: keep encrypted credentials and show a retry screen.
+      return session != null;
+    } on IOException {
+      return session != null;
+    } on TimeoutException {
+      return session != null;
     }
   }
 
   Future<Map<String, dynamic>> workspace() =>
       request('/api/mobile/v1/contributor-workspace');
+
   Future<Map<String, dynamic>> notifications() =>
       request('/api/mobile/v1/notifications');
+
   Future<void> markRead(String id) async {
     await request('/api/mobile/v1/notifications',
         body: {'op': 'read', 'id': id});
   }
-  Future<void> createDraft(String title, String description, String subjectId) async {
+
+  Future<void> createDraft(
+      String title, String description, String subjectId) async {
     await request('/api/mobile/v1/contributor-workspace',
         body: {'title': title, 'description': description, 'subject_id': subjectId});
   }
@@ -168,15 +268,13 @@ class ContributorApi {
 
   Future<void> signOut() async {
     final current = session;
-    session = null;
     try {
       if (current != null) {
-        session = current;
-        await request('/api/mobile/v1/session', body: {'op': 'logout'});
+        await _send('/api/mobile/v1/session', authenticate: true,
+            method: 'POST', body: {'op': 'logout'});
       }
     } finally {
-      session = null;
-      await _vault.delete(key: _key);
+      await _clear();
     }
   }
 }
