@@ -359,6 +359,72 @@ class _ContributorHomeState extends State<ContributorHome> {
                   icon: const Icon(Icons.picture_as_pdf_outlined),
                   label: const Text('Choose and upload PDF'),
                 ),
+              if (status == 'draft') ...[
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    showModalBottomSheet<void>(
+                      context: context,
+                      isScrollControlled: true,
+                      showDragHandle: true,
+                      builder: (_) => Padding(
+                        padding: EdgeInsets.fromLTRB(12, 12, 12,
+                          MediaQuery.of(context).viewInsets.bottom + 18),
+                        child: SingleChildScrollView(
+                          child: _DraftComposer(
+                            subjects: _items('subjects'),
+                            busy: false,
+                            initialTitle: note['title']?.toString() ?? '',
+                            initialDescription: note['description']?.toString() ?? '',
+                            initialSubject: note['subject_id']?.toString(),
+                            onSave: (title, description, subject) async {
+                              await api.updateDraft(note['id'].toString(),
+                                title, description, subject);
+                              if (!mounted) return;
+                              Navigator.of(context).pop();
+                              await _refresh();
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Edit draft details'),
+                ),
+                const SizedBox(height: 10),
+                TextButton.icon(
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (dialogContext) => AlertDialog(
+                        title: const Text('Delete private draft?'),
+                        content: const Text('This will permanently remove your draft and associated media. Published notes cannot be deleted.'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(dialogContext, false),
+                            child: const Text('Cancel')),
+                          TextButton(onPressed: () => Navigator.pop(dialogContext, true),
+                            child: const Text('Delete draft')),
+                        ],
+                      ),
+                    );
+                    if (confirmed != true) return;
+                    try {
+                      await api.deleteDraft(note['id'].toString());
+                      await _refresh();
+                    } catch (_) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Draft could not be deleted. No further action taken.')));
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Delete draft'),
+                ),
+              ],
               const SizedBox(height: 10),
               const Text('Watermarked page conversion is required before admin review.'),
             ]),
@@ -451,18 +517,28 @@ class _ContributorHomeState extends State<ContributorHome> {
 
 class _DraftComposer extends StatefulWidget {
   const _DraftComposer({required this.subjects, required this.onSave,
-    required this.busy});
+    required this.busy, this.initialTitle = '', this.initialDescription = '',
+    this.initialSubject});
   final List<Map<String, dynamic>> subjects;
   final bool busy;
+  final String initialTitle, initialDescription;
+  final String? initialSubject;
   final Future<void> Function(String, String, String) onSave;
   @override
   State<_DraftComposer> createState() => _DraftComposerState();
 }
 
 class _DraftComposerState extends State<_DraftComposer> {
-  final title = TextEditingController(), description = TextEditingController();
+  late final TextEditingController title, description;
   String? subject, error;
   bool submitting = false;
+  @override
+  void initState() {
+    super.initState();
+    title = TextEditingController(text: widget.initialTitle);
+    description = TextEditingController(text: widget.initialDescription);
+    subject = widget.initialSubject;
+  }
   @override
   void dispose() {
     title.dispose(); description.dispose(); super.dispose();
