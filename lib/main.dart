@@ -1,4 +1,6 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'contributor_navigation.dart';
@@ -100,6 +102,27 @@ class _ContributorWorkspaceState extends State<ContributorWorkspace> {
         },
       ))
       ..loadRequest(_start);
+    if (_controller.platform is AndroidWebViewController) {
+      final android = _controller.platform as AndroidWebViewController;
+      android.setOnShowFileSelector((params) async {
+        try {
+          final selected = await FilePicker.platform.pickFiles(
+            type: FileType.custom,
+            allowedExtensions: const ['pdf'],
+            allowMultiple: params.mode == FileSelectorMode.openMultiple,
+            withData: false,
+          );
+          if (selected == null) return const <String>[];
+          return selected.files
+              .where((file) => file.path != null &&
+                  file.extension?.toLowerCase() == 'pdf')
+              .map((file) => Uri.file(file.path!).toString())
+              .toList(growable: false);
+        } catch (_) {
+          return const <String>[];
+        }
+      });
+    }
   }
 
   Future<void> _openTab(int index) async {
