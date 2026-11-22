@@ -542,6 +542,39 @@ class _ContributorHomeState extends State<ContributorHome> {
         ? items.whereType<Map<String, dynamic>>().toList() : <Map<String, dynamic>>[];
     return _scroll([
       _heading('Notifications', 'Approval decisions and important account activity'),
+      if (notifications.isNotEmpty)
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: busy ? null : () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (dialogContext) => AlertDialog(
+                  title: const Text('Clear notifications?'),
+                  content: const Text('This clears your own inbox. The action cannot be undone.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      child: const Text('Cancel')),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(dialogContext, true),
+                      child: const Text('Clear inbox')),
+                  ],
+                ),
+              );
+              if (confirmed != true) return;
+              try {
+                await api.clearNotifications();
+                final refreshed = await api.notifications();
+                if (mounted) setState(() => inbox = refreshed);
+              } catch (_) {
+                if (mounted) setState(() => error =
+                    'Could not clear notifications. Please retry.');
+              }
+            },
+            icon: const Icon(Icons.delete_sweep_outlined),
+            label: const Text('Clear inbox')),
+        ),
       if (inbox == null)
         Center(child: FilledButton.icon(onPressed: () => _changeTab(4),
           icon: const Icon(Icons.refresh), label: const Text('Load inbox')))
