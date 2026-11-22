@@ -1,238 +1,488 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:webview_flutter_android/webview_flutter_android.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:webview_flutter/webview_flutter.dart';
-import 'contributor_navigation.dart';
+import 'contributor_api.dart';
+import 'contributor_challenge.dart';
 
 void main() => runApp(const ContributorsApp());
 
-const _blue = Color(0xFF1F527E);
-const _ink = Color(0xFF132E49);
-const _pages = <String>[
-  '/staff',
-  '/staff/notes/new',
-  '/staff?status=draft',
-  '/profile',
-  '/notifications',
+const blue = Color(0xFF1F527E);
+const labels = ['Dashboard', 'Upload', 'Notes', 'Profile', 'Inbox'];
+const icons = [
+  Icons.dashboard_outlined, Icons.upload_file_outlined,
+  Icons.folder_copy_outlined, Icons.person_outline,
+  Icons.notifications_none,
 ];
 
 class ContributorsApp extends StatelessWidget {
   const ContributorsApp({super.key});
-
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'SMIUNotes Contributors',
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(seedColor: _blue),
-      scaffoldBackgroundColor: const Color(0xFFF0F5F9),
-      appBarTheme: const AppBarTheme(
-        elevation: 0,
-        backgroundColor: Color(0xFFF0F5F9),
-        foregroundColor: _ink,
+      colorScheme: ColorScheme.fromSeed(seedColor: blue),
+      scaffoldBackgroundColor: const Color(0xFFF0F5FA),
+      inputDecorationTheme: const InputDecorationTheme(
+        border: OutlineInputBorder(),
       ),
     ),
-    home: const ContributorWorkspace(),
+    home: const ContributorHome(),
   );
 }
 
-class ContributorWorkspace extends StatefulWidget {
-  const ContributorWorkspace({super.key});
-
+class ContributorHome extends StatefulWidget {
+  const ContributorHome({super.key});
   @override
-  State<ContributorWorkspace> createState() => _ContributorWorkspaceState();
+  State<ContributorHome> createState() => _ContributorHomeState();
 }
 
-class _ContributorWorkspaceState extends State<ContributorWorkspace> {
-  late final WebViewController _controller;
+class _ContributorHomeState extends State<ContributorHome> {
+  final api = ContributorApi();
+  bool restoring = true, busy = false, authenticated = false;
   int selected = 0;
-  bool _loading = true;
-  String? _error;
-  int _progress = 0;
-  bool _loginMode = true;
-
-  Uri get _start => Uri.https('smiunotes.com', '/verify');
+  String? error;
+  Map<String, dynamic>? workspace;
+  Map<String, dynamic>? inbox;
+  final id = TextEditingController(), password = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0xFFF0F5F9))
-      ..setNavigationDelegate(NavigationDelegate(
-        onPageStarted: (url) {
-          if (!mounted) return;
-          final path = Uri.tryParse(url)?.path ?? '';
-          setState(() {
-            _loading = true;
-            _error = null;
-            _loginMode = path == '/verify' || path == '/login' ||
-                path.startsWith('/auth/');
-          });
-        },
-        onProgress: (percent) {
-          if (mounted) setState(() => _progress = percent);
-        },
-        onPageFinished: (url) {
-          if (!mounted) return;
-          setState(() => _loading = false);
-        },
-        onWebResourceError: (error) {
-          if (error.isForMainFrame == true && mounted) {
-            setState(() {
-              _loading = false;
-              _error = error.description;
-            });
-          }
-        },
-        onNavigationRequest: (request) {
-          final decision = ContributorNavigation.classify(request.url);
-          if (decision == ContributorDestination.internal) {
-            return NavigationDecision.navigate;
-          }
-          if (decision == ContributorDestination.external) {
-            final uri = Uri.tryParse(request.url);
-            if (uri != null) {
-              launchUrl(uri, mode: LaunchMode.externalApplication);
-            }
-          }
-          return NavigationDecision.prevent;
-        },
-      ))
-      ..loadRequest(_start);
-    if (_controller.platform is AndroidWebViewController) {
-      final android = _controller.platform as AndroidWebViewController;
-      android.setOnShowFileSelector((params) async {
-        try {
-          final selected = await FilePicker.platform.pickFiles(
-            type: FileType.custom,
-            allowedExtensions: const ['pdf'],
-            allowMultiple: params.mode == FileSelectorMode.openMultiple,
-            withData: false,
-          );
-          if (selected == null) return const <String>[];
-          return selected.files
-              .where((file) => file.path != null &&
-                  file.extension?.toLowerCase() == 'pdf')
-              .map((file) => Uri.file(file.path!).toString())
-              .toList(growable: false);
-        } catch (_) {
-          return const <String>[];
-        }
+    _restore();
+  }
+
+  @override
+  void dispose() {
+    id.dispose();
+    password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _restore() async {
+    final success = await api.restore();
+    if (!mounted) return;
+    setState(() { restoring = false; authenticated = success; });
+    if (success) await _refresh();
+  }
+
+  Future<void> _signIn() async {
+    if (busy) return;
+    if (id.text.trim().isEmpty || password.text.isEmpty) {
+      setState(() => error = 'Enter Student ID and password.');
+      return;
+    }
+    setState(() { busy = true; error = null; });
+    try {
+      if (!await api.isLoginEnabled()) {
+        throw StateError('Mobile login is currently disabled on the website.');
+      }
+      if (!mounted) return;
+      final proof = await requestContributorChallenge(context);
+      if (proof == null || proof.isEmpty) return;
+      await api.signIn(id.text, password.text, proof);
+      final result = await api.workspace();
+      if (!mounted) return;
+      password.clear();
+      setState(() { authenticated = true; workspace = result; selected = 0; });
+    } catch (e) {
+      if (mounted) setState(() => error = _safeError(e));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  String _safeError(Object error) {
+    final message = error.toString().replaceFirst(RegExp(r'^(HttpException|Bad state): ?'), '');
+    if (message.contains('403') ||
+        message.contains('Approved contributor access required')) {
+      return 'Only active, approved contributors can use this app.';
+    }
+    if (message.contains('Mobile login is currently disabled')) {
+      return 'Mobile sign-in is not enabled on the server.';
+    }
+    return 'Unable to complete this request. Check your connection or account access.';
+  }
+
+  Future<void> _refresh() async {
+    if (!authenticated || busy) return;
+    setState(() { busy = true; error = null; });
+    try {
+      final result = await api.workspace();
+      Map<String, dynamic>? messages;
+      if (selected == 4) messages = await api.notifications();
+      if (mounted) setState(() { workspace = result; if (messages != null) inbox = messages; });
+    } catch (e) {
+      if (mounted) setState(() => error = _safeError(e));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _changeTab(int index) async {
+    setState(() => selected = index);
+    if (index == 4) {
+      try {
+        final result = await api.notifications();
+        if (mounted) setState(() => inbox = result);
+      } catch (e) {
+        if (mounted) setState(() => error = _safeError(e));
+      }
+    }
+  }
+
+  Future<void> _signOut() async {
+    setState(() { busy = true; error = null; });
+    try {
+      await api.signOut();
+    } catch (_) {
+      // Local credentials have been cleared even if remote revoke fails.
+    } finally {
+      if (mounted) setState(() {
+        busy = false; authenticated = false; workspace = null;
+        inbox = null; selected = 0;
       });
     }
   }
 
-  Future<void> _openTab(int index) async {
-    if (index < 0 || index >= _pages.length) return;
-    setState(() { selected = index; _error = null; });
-    await _controller.loadRequest(Uri.https('smiunotes.com', _pages[index].split('?').first,
-      _pages[index].contains('?') ? {'status': 'draft'} : null));
+  List<Map<String, dynamic>> _items(String key) {
+    final value = workspace?[key];
+    return value is List
+        ? value.whereType<Map<String, dynamic>>().toList()
+        : [];
   }
-
-  Future<void> _back() async {
-    if (await _controller.canGoBack()) {
-      await _controller.goBack();
-    } else {
-      await _openTab(0);
-    }
-  }
-
-  Future<void> _refresh() => _controller.reload();
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _back();
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          titleSpacing: 14,
-          title: const Row(children: [
-            Icon(Icons.auto_stories_rounded, color: _blue, size: 25),
-            SizedBox(width: 9),
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('SMIUNotes', style: TextStyle(fontSize: 19,
-                    fontWeight: FontWeight.w800)),
-                Text('Contributors Workspace',
-                    style: TextStyle(fontSize: 10, color: Color(0xFF64778A))),
-              ],
-            )),
-          ]),
-          actions: [
-            IconButton(
-              tooltip: 'Open login',
-              onPressed: () => _controller.loadRequest(_start),
-              icon: const Icon(Icons.account_circle_outlined),
-            ),
-            IconButton(
-              tooltip: 'Refresh',
-              onPressed: _refresh,
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-          ],
-        ),
-        body: Stack(children: [
-          WebViewWidget(controller: _controller),
-          if (_loading)
-            Align(
-              alignment: Alignment.topCenter,
-              child: LinearProgressIndicator(
-                value: _progress > 0 && _progress < 100
-                    ? _progress / 100 : null,
-              ),
-            ),
-          if (_error != null)
-            ColoredBox(
-              color: const Color(0xFFF0F5F9),
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(28),
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.cloud_off_outlined,
-                        color: colors.onSurfaceVariant, size: 50),
-                    const SizedBox(height: 14),
-                    const Text('Unable to load SMIUNotes',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 8),
-                    Text(_error!, textAlign: TextAlign.center),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: _refresh,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Try again'),
-                    ),
-                  ]),
-                ),
-              ),
-            ),
+    if (restoring) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    return Scaffold(
+      appBar: AppBar(
+        title: const Row(children: [
+          Icon(Icons.auto_stories_rounded, color: blue),
+          SizedBox(width: 10),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('SMIUNotes', style: TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.w800)),
+              Text('Contributors', style: TextStyle(fontSize: 11)),
+            ],
+          )),
         ]),
-        bottomNavigationBar: _loginMode ? null : NavigationBar(
-          height: 72,
-          selectedIndex: selected,
-          onDestinationSelected: _openTab,
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.dashboard_outlined),
-                selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-            NavigationDestination(icon: Icon(Icons.upload_file_outlined),
-                selectedIcon: Icon(Icons.upload_file), label: 'Upload'),
-            NavigationDestination(icon: Icon(Icons.folder_copy_outlined),
-                selectedIcon: Icon(Icons.folder_copy), label: 'Notes'),
-            NavigationDestination(icon: Icon(Icons.person_outline),
-                selectedIcon: Icon(Icons.person), label: 'Profile'),
-            NavigationDestination(icon: Icon(Icons.notifications_none),
-                selectedIcon: Icon(Icons.notifications), label: 'Inbox'),
-          ],
-        ),
+        actions: [
+          if (authenticated)
+            IconButton(tooltip: 'Refresh', onPressed: busy ? null : _refresh,
+                icon: const Icon(Icons.refresh)),
+          if (authenticated)
+            IconButton(tooltip: 'Sign out', onPressed: busy ? null : _signOut,
+                icon: const Icon(Icons.logout)),
+        ],
       ),
+      body: Column(children: [
+        if (busy) const LinearProgressIndicator(),
+        if (error != null)
+          MaterialBanner(
+            content: Text(error!),
+            actions: [TextButton(onPressed: () => setState(() => error = null),
+                child: const Text('Dismiss'))],
+          ),
+        Expanded(child: authenticated ? _workspaceBody() : _loginBody()),
+      ]),
+      bottomNavigationBar: authenticated ? NavigationBar(
+        selectedIndex: selected,
+        onDestinationSelected: _changeTab,
+        destinations: [
+          for (var i = 0; i < labels.length; i++)
+            NavigationDestination(icon: Icon(icons[i]), label: labels[i]),
+        ],
+      ) : null,
     );
   }
+
+  Widget _loginBody() => Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 430),
+      child: ListView(shrinkWrap: true,
+        padding: const EdgeInsets.all(24),
+        children: [
+          const Icon(Icons.verified_user_outlined, color: blue, size: 56),
+          const SizedBox(height: 20),
+          const Text('Contributor sign in', textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          const Text('Approved contributors only. Use your existing SMIUNotes Student ID and password.',
+            textAlign: TextAlign.center),
+          const SizedBox(height: 25),
+          TextField(controller: id, textCapitalization: TextCapitalization.characters,
+            maxLength: 32, decoration: const InputDecoration(
+              labelText: 'Student ID', prefixIcon: Icon(Icons.badge_outlined))),
+          const SizedBox(height: 12),
+          TextField(controller: password, obscureText: true,
+            onSubmitted: (_) => _signIn(),
+            decoration: const InputDecoration(
+              labelText: 'Password', prefixIcon: Icon(Icons.lock_outline))),
+          const SizedBox(height: 20),
+          FilledButton.icon(onPressed: busy ? null : _signIn,
+            icon: const Icon(Icons.login), label: const Text('Sign in')),
+          const SizedBox(height: 12),
+          const Text('Registration and password recovery remain on smiunotes.com.',
+            textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
+        ],
+      ),
+    ),
+  );
+
+  Widget _workspaceBody() {
+    if (workspace == null) {
+      return Center(child: OutlinedButton.icon(onPressed: _refresh,
+        icon: const Icon(Icons.refresh), label: const Text('Load workspace')));
+    }
+    switch (selected) {
+      case 0: return _dashboard();
+      case 1: return _upload();
+      case 2: return _notes();
+      case 3: return _profile();
+      default: return _notifications();
+    }
+  }
+
+  Widget _scroll(List<Widget> children) => RefreshIndicator(
+    onRefresh: _refresh,
+    child: ListView(padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: children),
+  );
+
+  Widget _heading(String title, String detail) => Padding(
+    padding: const EdgeInsets.only(bottom: 20),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(title, style: const TextStyle(
+        fontSize: 25, fontWeight: FontWeight.w800)),
+      const SizedBox(height: 5),
+      Text(detail, style: TextStyle(
+        color: Theme.of(context).colorScheme.onSurfaceVariant)),
+    ]),
+  );
+
+  Widget _stat(String label, Object value, IconData icon) => Card(
+    child: Padding(padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: blue),
+        const SizedBox(height: 13),
+        Text('$value', style: const TextStyle(
+          fontSize: 28, fontWeight: FontWeight.w800)),
+        Text(label),
+      ]),
+    ),
+  );
+
+  Widget _dashboard() {
+    final profile = workspace?['profile'] as Map<String, dynamic>? ?? {};
+    final counts = workspace?['counts'] as Map<String, dynamic>? ?? {};
+    final notes = _items('notes');
+    return _scroll([
+      _heading('Your dashboard', 'Welcome, ${profile['student_name'] ?? 'Contributor'}'),
+      Row(children: [
+        Expanded(child: _stat('Total notes', counts['total'] ?? 0, Icons.library_books_outlined)),
+        Expanded(child: _stat('Drafts', counts['drafts'] ?? 0, Icons.edit_note_outlined)),
+      ]),
+      Row(children: [
+        Expanded(child: _stat('Published', counts['published'] ?? 0, Icons.check_circle_outline)),
+        Expanded(child: Card(child: ListTile(
+          title: const Text('New draft'),
+          subtitle: const Text('Start contributing'),
+          onTap: () => _changeTab(1),
+          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        ))),
+      ]),
+      const SizedBox(height: 14),
+      const Text('Recent activity', style: TextStyle(fontSize: 19,
+        fontWeight: FontWeight.w700)),
+      ...notes.take(5).map(_noteTile),
+      if (notes.isEmpty) const ListTile(title: Text('No contributions yet')),
+    ]);
+  }
+
+  Widget _notes() {
+    final notes = _items('notes');
+    return _scroll([
+      _heading('Manage notes', 'Your drafts and published contributions'),
+      if (notes.isEmpty) const Card(child:
+        ListTile(title: Text('No notes uploaded yet'))),
+      ...notes.map(_noteTile),
+    ]);
+  }
+
+  Widget _noteTile(Map<String, dynamic> note) {
+    final status = note['status']?.toString() ?? 'draft';
+    return Card(child: ListTile(
+      leading: Icon(status == 'published'
+          ? Icons.check_circle_outline : Icons.description_outlined,
+          color: status == 'published' ? Colors.green : blue),
+      title: Text(note['title']?.toString() ?? 'Untitled'),
+      subtitle: Text('${status.toUpperCase()} · ${note['updated_at']?.toString().split('T').first ?? ''}'),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => showModalBottomSheet<void>(
+        context: context, showDragHandle: true,
+        builder: (_) => Padding(padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(note['title']?.toString() ?? 'Note',
+                style: const TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              Text('Status: $status'),
+              const SizedBox(height: 8),
+              Text(note['description']?.toString() ?? ''),
+              const SizedBox(height: 20),
+              const Text('PDF conversion and draft editing require the next native media API.'),
+            ]),
+        ),
+      ),
+    ));
+  }
+
+  Widget _upload() {
+    final scope = workspace?['upload_scope'] as Map<String, dynamic>? ?? {};
+    final subjects = _items('subjects');
+    return _scroll([
+      _heading('Upload notes', 'Create a private draft for your subject'),
+      Card(child: Padding(padding: const EdgeInsets.all(14),
+        child: Text('Assigned department: ${scope['department'] ?? '-'} · Semester ${scope['semester'] ?? '-'}'))),
+      const SizedBox(height: 12),
+      if (scope['eligible'] != true)
+        const Card(child: ListTile(
+          leading: Icon(Icons.lock_outline),
+          title: Text('Upload permission not assigned'),
+          subtitle: Text('Ask an administrator to verify your department and semester.'),
+        ))
+      else if (subjects.isEmpty)
+        const Card(child: ListTile(title: Text('No subjects available in your semester')))
+      else
+        _DraftComposer(subjects: subjects, busy: busy,
+          onSave: (title, description, subject) async {
+            await api.createDraft(title, description, subject);
+            await _refresh();
+            if (mounted) _changeTab(2);
+          }),
+      const SizedBox(height: 18),
+      const Text('After creating the draft, private PDF upload and page conversion will be enabled when the dedicated native media endpoint is ready.'),
+    ]);
+  }
+
+  Widget _profile() {
+    final profile = workspace?['profile'] as Map<String, dynamic>? ?? {};
+    final scope = workspace?['upload_scope'] as Map<String, dynamic>? ?? {};
+    return _scroll([
+      _heading('Contributor profile', 'Your verified SMIUNotes identity'),
+      Center(child: CircleAvatar(radius: 38, child: Text(
+        (profile['student_name']?.toString().isNotEmpty == true
+          ? profile['student_name'].toString()[0] : 'C').toUpperCase(),
+        style: const TextStyle(fontSize: 30)))),
+      const SizedBox(height: 16),
+      for (final data in <(String, String)>[
+        ('Name', profile['student_name']?.toString() ?? '-'),
+        ('Student ID', profile['student_id']?.toString() ?? '-'),
+        ('Department', profile['department']?.toString() ?? '-'),
+        ('Semester', scope['semester']?.toString() ?? '-'),
+        ('Role', 'Approved contributor'),
+      ])
+        Card(child: ListTile(title: Text(data.$1),
+          subtitle: Text(data.$2))),
+      const SizedBox(height: 12),
+      OutlinedButton.icon(onPressed: _signOut,
+        icon: const Icon(Icons.logout), label: const Text('Sign out')),
+    ]);
+  }
+
+  Widget _notifications() {
+    final items = inbox?['items'];
+    final notifications = items is List
+        ? items.whereType<Map<String, dynamic>>().toList() : <Map<String, dynamic>>[];
+    return _scroll([
+      _heading('Notifications', 'Approval decisions and important account activity'),
+      if (inbox == null)
+        Center(child: FilledButton.icon(onPressed: () => _changeTab(4),
+          icon: const Icon(Icons.refresh), label: const Text('Load inbox')))
+      else if (notifications.isEmpty)
+        const Card(child: ListTile(title: Text('No notifications yet')))
+      else
+        ...notifications.map((n) => Card(child: ListTile(
+          title: Text(n['title']?.toString() ?? 'Notification'),
+          subtitle: Text(n['message']?.toString() ?? ''),
+          trailing: n['read_at'] == null
+            ? TextButton(onPressed: () async {
+                try {
+                  await api.markRead(n['id'].toString());
+                  await _changeTab(4);
+                } catch (_) {
+                  if (mounted) setState(() => error = 'Could not update notification.');
+                }
+              }, child: const Text('Read')) : const Icon(Icons.done),
+        ))),
+    ]);
+  }
+}
+
+class _DraftComposer extends StatefulWidget {
+  const _DraftComposer({required this.subjects, required this.onSave,
+    required this.busy});
+  final List<Map<String, dynamic>> subjects;
+  final bool busy;
+  final Future<void> Function(String, String, String) onSave;
+  @override
+  State<_DraftComposer> createState() => _DraftComposerState();
+}
+
+class _DraftComposerState extends State<_DraftComposer> {
+  final title = TextEditingController(), description = TextEditingController();
+  String? subject, error;
+  bool submitting = false;
+  @override
+  void dispose() {
+    title.dispose(); description.dispose(); super.dispose();
+  }
+  Future<void> submit() async {
+    if (submitting) return;
+    if (title.text.trim().length < 3 || description.text.trim().length < 3 ||
+        subject == null) {
+      setState(() => error = 'Enter title, description, and subject.');
+      return;
+    }
+    setState(() { submitting = true; error = null; });
+    try {
+      await widget.onSave(title.text.trim(), description.text.trim(), subject!);
+    } catch (_) {
+      if (mounted) setState(() => error = 'Unable to create draft. Please retry.');
+    } finally {
+      if (mounted) setState(() => submitting = false);
+    }
+  }
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        DropdownButtonFormField<String>(
+          value: subject,
+          decoration: const InputDecoration(labelText: 'Subject'),
+          items: widget.subjects.map((s) => DropdownMenuItem(
+            value: s['id'] as String,
+            child: Text('${s['code']} · ${s['name']}', overflow: TextOverflow.ellipsis),
+          )).toList(),
+          onChanged: (v) => setState(() => subject = v),
+        ),
+        const SizedBox(height: 12),
+        TextField(controller: title, maxLength: 150,
+          decoration: const InputDecoration(labelText: 'Note title')),
+        const SizedBox(height: 12),
+        TextField(controller: description, maxLength: 2000,
+          minLines: 3, maxLines: 5,
+          decoration: const InputDecoration(labelText: 'Description')),
+        if (error != null) Text(error!, style: const TextStyle(color: Colors.red)),
+        const SizedBox(height: 12),
+        FilledButton.icon(onPressed: submitting || widget.busy ? null : submit,
+          icon: const Icon(Icons.save_outlined),
+          label: const Text('Create private draft')),
+      ]),
+    ),
+  );
 }
