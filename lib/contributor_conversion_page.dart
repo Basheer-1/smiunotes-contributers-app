@@ -179,7 +179,7 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
                   icon: const Icon(Icons.chevron_right)),
               ]),
               Image.network(previewUrl!, fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => const Text('Image expired; reopen preview.')),
+                errorBuilder: (context, error, stackTrace) => const Text('Image expired; reopen preview.')),
             ],
             const SizedBox(height: 8),
             const Text('Only administrators can approve and publish notes.'),
