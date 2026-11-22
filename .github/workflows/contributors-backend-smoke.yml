@@ -1,0 +1,36 @@
+name: Contributors Backend Smoke Check
+on:
+  push:
+    paths:
+      - '.github/workflows/contributors-backend-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Check mobile auth readiness without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 20 --retry 2 --retry-delay 2 \
+            -H 'Accept: application/json' \
+            https://smiunotes.com/api/mobile/v1/auth > "$RUNNER_TEMP/mobile-auth.json"
+          node -e 'const fs=require("fs");const o=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/mobile-auth.json"));if(o.enabled!==true) process.exit(1);console.log("PASS: production mobile auth enabled")'
+      - name: Verify workspace exists and denies anonymous access
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl -sS -o "$RUNNER_TEMP/workspace.json" -w '%{http_code}' \
+            --max-time 20 --retry 2 --retry-delay 2 \
+            -H 'Accept: application/json' \
+            https://smiunotes.com/api/mobile/v1/contributor-workspace)"
+          if [[ "$status" != "403" ]]; then
+            echo "FAIL: anonymous workspace request returned HTTP $status (expected 403)" >&2
+            exit 1
+          fi
+          node -e 'const fs=require("fs");const o=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/workspace.json"));if(typeof o.error!=="string"||"notes" in o||"profile" in o)process.exit(1);console.log("PASS: workspace denies anonymous access without leaking account data")'
