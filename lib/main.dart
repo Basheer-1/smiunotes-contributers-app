@@ -1,10 +1,10 @@
 import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'contributor_avatar.dart';
 import 'contributor_api.dart';
 import 'contributor_challenge.dart';
-import 'contributor_pdf_uploader.dart';
-import 'contributor_conversion_page.dart';
+import 'contributor_draft_details_page.dart';
 
 void main() => runApp(const ContributorsApp());
 
@@ -16,26 +16,88 @@ const icons = [
   Icons.notifications_none,
 ];
 
-class ContributorsApp extends StatelessWidget {
+class ContributorsApp extends StatefulWidget {
   const ContributorsApp({super.key});
+
+  @override
+  State<ContributorsApp> createState() => _ContributorsAppState();
+}
+
+class _ContributorsAppState extends State<ContributorsApp> {
+  static const _vault = FlutterSecureStorage();
+  static const _themeKey = 'smiunotes.theme.v1';
+  bool darkMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreTheme();
+  }
+
+  Future<void> _restoreTheme() async {
+    try {
+      final saved = await _vault.read(key: _themeKey);
+      if (mounted && (saved == 'dark' || saved == 'light')) {
+        setState(() => darkMode = saved == 'dark');
+      }
+    } catch (_) {
+      // Keep light theme usable if device storage is temporarily unavailable.
+    }
+  }
+
+  void _toggleTheme() {
+    setState(() => darkMode = !darkMode);
+    _vault.write(key: _themeKey, value: darkMode ? 'dark' : 'light')
+        .catchError((Object _) {});
+  }
+
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'SMIUNotes Contributors',
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(seedColor: blue),
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF183C68)),
       scaffoldBackgroundColor: const Color(0xFFF0F5FA),
       inputDecorationTheme: const InputDecorationTheme(
         border: OutlineInputBorder(),
       ),
     ),
-    home: const ContributorHome(),
+    darkTheme: ThemeData(
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF87B9F8),
+        brightness: Brightness.dark,
+        surface: const Color(0xFF101E32),
+      ).copyWith(
+        primary: const Color(0xFF8EC5FF),
+        onPrimary: const Color(0xFF09213C),
+        primaryContainer: const Color(0xFF18395B),
+        onPrimaryContainer: const Color(0xFFD9EAFD),
+        secondary: const Color(0xFFACD7F7),
+        surface: const Color(0xFF101E32),
+        onSurface: const Color(0xFFEAF3FF),
+        onSurfaceVariant: const Color(0xFFB7C9DE),
+        outlineVariant: const Color(0xFF324862),
+      ),
+      scaffoldBackgroundColor: const Color(0xFF081321),
+      inputDecorationTheme: const InputDecorationTheme(
+        border: OutlineInputBorder(),
+      ),
+    ),
+    themeMode: darkMode ? ThemeMode.dark : ThemeMode.light,
+    home: ContributorHome(
+      darkMode: darkMode, onThemeToggle: _toggleTheme,
+    ),
   );
 }
 
 class ContributorHome extends StatefulWidget {
-  const ContributorHome({super.key});
+  const ContributorHome({super.key, required this.darkMode,
+      required this.onThemeToggle});
+  final bool darkMode;
+  final VoidCallback onThemeToggle;
+
   @override
   State<ContributorHome> createState() => _ContributorHomeState();
 }
@@ -177,7 +239,7 @@ class _ContributorHomeState extends State<ContributorHome> {
     return Scaffold(
       appBar: AppBar(
         title: const Row(children: [
-          Icon(Icons.auto_stories_rounded, color: blue),
+          Icon(Icons.auto_stories_rounded),
           SizedBox(width: 10),
           Expanded(child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,6 +251,12 @@ class _ContributorHomeState extends State<ContributorHome> {
           )),
         ]),
         actions: [
+          IconButton(
+            tooltip: widget.darkMode ? 'Switch to light theme' : 'Switch to dark theme',
+            onPressed: widget.onThemeToggle,
+            icon: Icon(widget.darkMode ? Icons.light_mode_outlined
+                : Icons.dark_mode_outlined),
+          ),
           if (authenticated)
             IconButton(tooltip: 'Refresh', onPressed: busy ? null : _refresh,
                 icon: const Icon(Icons.refresh)),
@@ -224,7 +292,7 @@ class _ContributorHomeState extends State<ContributorHome> {
       child: ListView(shrinkWrap: true,
         padding: const EdgeInsets.all(24),
         children: [
-          const Icon(Icons.verified_user_outlined, color: blue, size: 56),
+          const Icon(Icons.verified_user_outlined, size: 56),
           const SizedBox(height: 20),
           const Text('Contributor sign in', textAlign: TextAlign.center,
             style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
@@ -285,7 +353,7 @@ class _ContributorHomeState extends State<ContributorHome> {
   Widget _stat(String label, Object value, IconData icon) => Card(
     child: Padding(padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: blue),
+        Icon(icon, color: Theme.of(context).colorScheme.primary),
         const SizedBox(height: 13),
         Text('$value', style: const TextStyle(
           fontSize: 28, fontWeight: FontWeight.w800)),
@@ -370,197 +438,27 @@ class _ContributorHomeState extends State<ContributorHome> {
 
   Widget _noteTile(Map<String, dynamic> note) {
     final status = note['status']?.toString() ?? 'draft';
+    final colors = Theme.of(context).colorScheme;
     return Card(child: ListTile(
       leading: Icon(status == 'published'
           ? Icons.check_circle_outline : Icons.description_outlined,
-          color: status == 'published' ? Colors.green : blue),
+          color: colors.primary),
       title: Text(note['title']?.toString() ?? 'Untitled'),
       subtitle: Text('${status.toUpperCase()} · ${note['updated_at']?.toString().split('T').first ?? ''}'),
       trailing: const Icon(Icons.chevron_right),
-      onTap: () => showModalBottomSheet<void>(
-        context: context, showDragHandle: true,
-        builder: (_) => Padding(padding: const EdgeInsets.all(24),
-          child: Column(mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(note['title']?.toString() ?? 'Note',
-                style: const TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
-              Text('Status: $status'),
-              const SizedBox(height: 8),
-              Text(note['description']?.toString() ?? ''),
-              const SizedBox(height: 20),
-              if (status == 'draft')
-                FilledButton.icon(
-                  onPressed: () async {
-                    Navigator.of(context).pop();
-                    try {
-                      final noteId = note['id']?.toString() ?? '';
-                      if (noteId.isEmpty) throw const FormatException('Missing note ID');
-                      final uploaded = await ContributorPdfUploader(api)
-                          .chooseAndUpload(noteId);
-                      if (!mounted || !uploaded) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Original PDF uploaded and verified. Page conversion is still required before admin review.')));
-                      await _refresh();
-                    } catch (e) {
-                      if (mounted) {
-                        final message = e is ContributorApiException &&
-                            e.status == 404
-                            ? 'PDF upload is not live yet. Your private draft is safe.'
-                            : 'PDF upload was not completed. Check the file or retry.';
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(message)));
-                      }
-                    }
-                  },
-                  icon: const Icon(Icons.picture_as_pdf_outlined),
-                  label: const Text('Choose and upload PDF'),
-                ),
-              if (status == 'draft') ...[
-                const SizedBox(height: 10),
-                TextButton.icon(
-                  onPressed: () async {
-                    Navigator.of(context).pop();
-                    final noteId = note['id']?.toString() ?? '';
-                    if (noteId.isEmpty) {
-                      return;
-                    }
-                    final uploader = ContributorPdfUploader(api);
-                    try {
-                      final exists = await uploader.originalExists(noteId);
-                      if (!mounted) return;
-                      if (!exists) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('This draft has no original PDF.')));
-                        return;
-                      }
-                      final approved = await showDialog<bool>(
-                        context: context,
-                        builder: (dialog) => AlertDialog(
-                          title: const Text('Remove original PDF?'),
-                          content: const Text(
-                            'Only your private draft can be changed. '
-                            'If you have converted pages, reset that conversion first. '
-                            'After removing the PDF, upload the replacement separately.'),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(dialog, false),
-                              child: const Text('Cancel')),
-                            FilledButton(onPressed: () => Navigator.pop(dialog, true),
-                              child: const Text('Remove PDF')),
-                          ],
-                        ),
-                      );
-                      if (approved != true) {
-                        return;
-                      }
-                      await uploader.removeOriginal(noteId);
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Original removed. You can upload a replacement.')));
-                      await _refresh();
-                    } catch (_) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text(
-                            'Could not remove PDF. Reset conversion first or retry.')));
-                      }
-                    }
-                  },
-                  icon: const Icon(Icons.remove_circle_outline),
-                  label: const Text('Remove original to replace'),
-                ),
-              ],
-              if (status == 'draft') ...[
-                const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      showDragHandle: true,
-                      builder: (_) => Padding(
-                        padding: EdgeInsets.fromLTRB(12, 12, 12,
-                          MediaQuery.of(context).viewInsets.bottom + 18),
-                        child: SingleChildScrollView(
-                          child: _DraftComposer(
-                            subjects: _items('subjects'),
-                            busy: false,
-                            initialTitle: note['title']?.toString() ?? '',
-                            initialDescription: note['description']?.toString() ?? '',
-                            initialSubject: note['subject_id']?.toString(),
-                            onSave: (title, description, subject) async {
-                              await api.updateDraft(note['id'].toString(),
-                                title, description, subject);
-                              if (!mounted) return;
-                              Navigator.of(context).pop();
-                              await _refresh();
-                            },
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Edit draft details'),
-                ),
-                const SizedBox(height: 10),
-                TextButton.icon(
-                  onPressed: () async {
-                    Navigator.of(context).pop();
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (dialogContext) => AlertDialog(
-                        title: const Text('Delete private draft?'),
-                        content: const Text('This will permanently remove your draft and associated media. Published notes cannot be deleted.'),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(dialogContext, false),
-                            child: const Text('Cancel')),
-                          TextButton(onPressed: () => Navigator.pop(dialogContext, true),
-                            child: const Text('Delete draft')),
-                        ],
-                      ),
-                    );
-                    if (confirmed != true) return;
-                    try {
-                      await api.deleteDraft(note['id'].toString());
-                      await _refresh();
-                    } catch (_) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Draft could not be deleted. No further action taken.')));
-                      }
-                    }
-                  },
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('Delete draft'),
-                ),
-              ],
-              if (status == 'draft') ...[
-                const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    Navigator.of(context).pop();
-                    await Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => ContributorConversionPage(
-                          noteId: note['id'].toString(),
-                          noteTitle: note['title']?.toString() ?? 'Draft',
-                          api: api,
-                        ),
-                      ),
-                    );
-                    if (mounted) await _refresh();
-                  },
-                  icon: const Icon(Icons.auto_fix_high),
-                  label: const Text('Prepare watermarked pages'),
-                ),
-              ],
-              const SizedBox(height: 10),
-              const Text('All uploaded PDFs must be converted into private, watermarked pages before admin review.'),
-            ]),
-        ),
-      ),
+      onTap: () async {
+        await Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => ContributorDraftDetailsPage(
+            api: api,
+            note: note,
+            subjects: _items('subjects'),
+            onChanged: () async {
+              if (mounted) await _refresh();
+            },
+          ),
+        ));
+        if (mounted) await _refresh();
+      },
     ));
   }
 
@@ -588,7 +486,7 @@ class _ContributorHomeState extends State<ContributorHome> {
             if (mounted) _changeTab(2);
           }),
       const SizedBox(height: 18),
-      const Text('After creating a draft, open it in Manage Notes to upload the original PDF. Watermarked page conversion remains a separate review step.'),
+      const Text('Step 1: Save your draft. Step 2: Open it under Notes and upload the PDF. Step 3: Prepare watermarked pages for review.'),
     ]);
   }
 
@@ -726,7 +624,8 @@ class _DraftComposerState extends State<_DraftComposer> {
     super.initState();
     title = TextEditingController(text: widget.initialTitle);
     description = TextEditingController(text: widget.initialDescription);
-    subject = widget.initialSubject;
+    subject = widget.initialSubject ?? (widget.subjects.isNotEmpty
+        ? widget.subjects.first['id']?.toString() : null);
   }
   @override
   void dispose() {
@@ -753,11 +652,13 @@ class _DraftComposerState extends State<_DraftComposer> {
     child: Padding(padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         DropdownButtonFormField<String>(
+          isExpanded: true,
           initialValue: subject,
           decoration: const InputDecoration(labelText: 'Subject'),
           items: widget.subjects.map((s) => DropdownMenuItem(
             value: s['id'] as String,
-            child: Text('${s['code']} · ${s['name']}', overflow: TextOverflow.ellipsis),
+            child: Text('${s['code']} · ${s['name']}',
+               maxLines: 1, overflow: TextOverflow.ellipsis),
           )).toList(),
           onChanged: (v) => setState(() => subject = v),
         ),
