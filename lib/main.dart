@@ -66,10 +66,19 @@ class _ContributorHomeState extends State<ContributorHome> {
   }
 
   Future<void> _restore() async {
-    final success = await api.restore();
-    if (!mounted) return;
-    setState(() { restoring = false; authenticated = success; });
-    if (success) await _refresh();
+    try {
+      final success = await api.restore();
+      if (!mounted) return;
+      setState(() { restoring = false; authenticated = success; });
+      if (success) await _refresh();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        restoring = false;
+        authenticated = api.session != null;
+        error = 'Saved session is temporarily unavailable. Retry to reconnect.';
+      });
+    }
   }
 
   Future<void> _signIn() async {
@@ -133,15 +142,11 @@ class _ContributorHomeState extends State<ContributorHome> {
   }
 
   Future<void> _changeTab(int index) async {
+    if (!authenticated || index < 0 || index >= labels.length) return;
     setState(() => selected = index);
-    if (index == 4) {
-      try {
-        final result = await api.notifications();
-        if (mounted) setState(() => inbox = result);
-      } catch (e) {
-        if (mounted) setState(() => error = _safeError(e));
-      }
-    }
+    // Refresh from the shared website backend whenever a tab is visited.
+    // This avoids requiring a full app restart after a new note is published.
+    await _refresh();
   }
 
   Future<void> _signOut() async {
