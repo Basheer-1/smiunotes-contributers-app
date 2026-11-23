@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'contributor_avatar.dart';
 import 'contributor_api.dart';
 import 'contributor_challenge.dart';
@@ -89,10 +90,6 @@ class _ContributorHomeState extends State<ContributorHome> {
     }
     setState(() { busy = true; error = null; });
     try {
-      if (!await api.isLoginEnabled()) {
-        throw StateError('Mobile login is currently disabled on the website.');
-      }
-      if (!mounted) return;
       final proof = await requestContributorChallenge(context);
       if (proof == null || proof.isEmpty) return;
       await api.signIn(id.text, password.text, proof);
@@ -101,29 +98,30 @@ class _ContributorHomeState extends State<ContributorHome> {
       password.clear();
       setState(() { authenticated = true; workspace = result; selected = 0; });
     } catch (e) {
-      if (mounted) { setState(() => error = _safeError(e)); }
+      if (mounted) {
+        setState(() {
+          error = _safeError(e);
+          if (api.session != null) {
+            // Authentication succeeded. A temporary workspace outage must
+            // not force another password login or consume a new device slot.
+            authenticated = true;
+            workspace = null;
+          }
+        });
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
   }
 
-  String _safeError(Object error) {
-    final message = error.toString().replaceFirst(RegExp(r'^(HttpException|Bad state): ?'), '');
-    if (message.contains('Contributor API is not deployed')) {
-      return 'This feature is awaiting a Contributors backend deployment. Your saved login is unaffected.';
+  String _safeError(Object error) => contributorAuthError(error);
+
+  Future<void> _openProfileDevices() async {
+    final uri = Uri.parse('https://smiunotes.com/profile');
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) setState(() => error =
+          'Open smiunotes.com/profile in your browser to manage devices.');
     }
-    if (message.contains('Approved contributor access required') ||
-        message.contains('Contributor access required')) {
-      return 'Contributor workspace access requires an approved contributor or site administrator account.';
-    }
-    if (message.contains('Mobile login is currently disabled')) {
-      return 'Mobile sign-in is not enabled on the server.';
-    }
-    if (message.contains('Invalid credentials') ||
-        message.contains('Security verification required')) {
-      return 'Sign-in failed. Check your credentials or security challenge.';
-    }
-    return 'Unable to connect to the Contributors service. Please retry or check availability.';
   }
 
   Future<void> _refresh() async {
@@ -232,7 +230,7 @@ class _ContributorHomeState extends State<ContributorHome> {
           const Text('Contributor sign in', textAlign: TextAlign.center,
             style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          const Text('Approved contributors only. Use your existing SMIUNotes Student ID and password.',
+          const Text('Approved contributors and administrators. Both open the same Contributor Workspace using their SMIUNotes Student ID and password.',
             textAlign: TextAlign.center),
           const SizedBox(height: 25),
           TextField(controller: id, textCapitalization: TextCapitalization.characters,
@@ -247,6 +245,10 @@ class _ContributorHomeState extends State<ContributorHome> {
           FilledButton.icon(onPressed: busy ? null : _signIn,
             icon: const Icon(Icons.login), label: const Text('Sign in')),
           const SizedBox(height: 12),
+          TextButton.icon(
+            onPressed: _openProfileDevices,
+            icon: const Icon(Icons.devices_outlined),
+            label: const Text('Manage active devices (maximum 4)')),
           const Text('Registration and password recovery remain on smiunotes.com.',
             textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
         ],
