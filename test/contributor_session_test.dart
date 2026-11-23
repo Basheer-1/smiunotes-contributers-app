@@ -14,6 +14,19 @@ void main() {
     expect(session.refreshToken.startsWith('refresh_'), isTrue);
   });
 
+  test('Production Supabase 12-character refresh tokens are accepted', () {
+    // Website server permits refresh tokens of >=12 characters.
+    final session = ContributorSession.parse({'session': {
+      'access_token': 'a' * 90,
+      'refresh_token': '123456789012',
+    }});
+    expect(session.refreshToken, '123456789012');
+    expect(() => ContributorSession.parse({'session': {
+      'access_token': 'a' * 90,
+      'refresh_token': '12345678901',
+    }}), throwsFormatException);
+  });
+
   test('Temporary backend failures never classify as revoked credentials', () {
     for (final status in [404, 408, 429, 500, 502, 503, 504]) {
       expect(contributorCredentialsRevoked(status), isFalse,
