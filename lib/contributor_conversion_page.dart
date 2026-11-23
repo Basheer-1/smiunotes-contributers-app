@@ -26,8 +26,11 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
     _checkStatus();
   }
 
-  Future<void> _checkStatus() async {
-    setState(() { busy = true; error = ''; });
+  Future<void> _checkStatus({bool preserveError = false}) async {
+    setState(() {
+      busy = true;
+      if (!preserveError) error = '';
+    });
     try {
       final response = await converter.status(widget.noteId);
       if (!mounted) return;
@@ -54,10 +57,10 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
     } catch (_) {
       if (mounted) {
         setState(() => error =
-          'Conversion was not completed. Check that you selected the same PDF that you uploaded. '
-          'If pages were partially uploaded, reset the conversion before trying again.');
+          'Conversion was not completed. Use the same PDF as the original. '
+          'If interrupted, reset the conversion before retrying.');
       }
-      await _checkStatus();
+      await _checkStatus(preserveError: true);
     } finally {
       if (mounted) setState(() => converting = false);
     }
