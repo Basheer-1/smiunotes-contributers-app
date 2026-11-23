@@ -150,18 +150,26 @@ class _ContributorHomeState extends State<ContributorHome> {
   }
 
   Future<void> _signOut() async {
+    if (busy) return;
     setState(() { busy = true; error = null; });
     try {
       await api.signOut();
-    } catch (_) {
-      // Local credentials have been cleared even if remote revoke fails.
-    } finally {
       if (mounted) {
         setState(() {
-          busy = false; authenticated = false; workspace = null;
+          authenticated = false; workspace = null;
           inbox = null; avatarFuture = null; selected = 0;
         });
       }
+    } catch (_) {
+      // Keep the encrypted session and the workspace visible. Retrying a
+      // failed remote sign-out must not strand a fifth-device slot.
+      if (mounted) {
+        setState(() => error =
+            'Device sign-out could not be confirmed. Check your connection '
+            'and retry. Your login has been kept on this device.');
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
