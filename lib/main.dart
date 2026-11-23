@@ -604,12 +604,9 @@ class _ContributorHomeState extends State<ContributorHome> {
 
 class _DraftComposer extends StatefulWidget {
   const _DraftComposer({required this.subjects, required this.onSave,
-    required this.busy, this.initialTitle = '', this.initialDescription = '',
-    this.initialSubject});
+    required this.busy});
   final List<Map<String, dynamic>> subjects;
   final bool busy;
-  final String initialTitle, initialDescription;
-  final String? initialSubject;
   final Future<void> Function(String, String, String) onSave;
   @override
   State<_DraftComposer> createState() => _DraftComposerState();
@@ -622,10 +619,10 @@ class _DraftComposerState extends State<_DraftComposer> {
   @override
   void initState() {
     super.initState();
-    title = TextEditingController(text: widget.initialTitle);
-    description = TextEditingController(text: widget.initialDescription);
-    subject = widget.initialSubject ?? (widget.subjects.isNotEmpty
-        ? widget.subjects.first['id']?.toString() : null);
+    title = TextEditingController();
+    description = TextEditingController();
+    subject = widget.subjects.isNotEmpty
+        ? widget.subjects.first['id']?.toString() : null;
   }
   @override
   void dispose() {
