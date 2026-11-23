@@ -227,6 +227,27 @@ class ContributorApi {
     }
   }
 
+  /// The same private administrator-review endpoint as smiunotes.com/recover.
+  /// Never changes the account or reveals whether a Student ID/email exists.
+  Future<String> requestAccountRecovery(
+      String studentId, String email, String details, String challenge) async {
+    final response = await request('/api/mobile/v1/auth',
+        authenticate: false,
+        body: {
+          'op': 'recover',
+          'studentId': studentId.trim().toUpperCase(),
+          'email': email.trim().toLowerCase(),
+          'details': details.trim(),
+          'turnstileToken': challenge,
+        });
+    final message = response['message'];
+    if (message is! String || message.isEmpty) {
+      throw const ContributorApiException(503,
+          'Recovery request confirmation unavailable.');
+    }
+    return message;
+  }
+
   Future<void> signIn(String id, String password, String challenge) async {
     final result = await request('/api/mobile/v1/auth', authenticate: false,
         body: {'op': 'password', 'studentId': id.trim().toUpperCase(),
