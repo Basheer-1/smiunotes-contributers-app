@@ -394,8 +394,9 @@ class _ContributorHomeState extends State<ContributorHome> {
                     try {
                       final noteId = note['id']?.toString() ?? '';
                       if (noteId.isEmpty) throw const FormatException('Missing note ID');
-                      await ContributorPdfUploader(api).chooseAndUpload(noteId);
-                      if (!mounted) return;
+                      final uploaded = await ContributorPdfUploader(api)
+                          .chooseAndUpload(noteId);
+                      if (!mounted || !uploaded) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Original PDF uploaded and verified. Page conversion is still required before admin review.')));
                       await _refresh();
