@@ -23,14 +23,15 @@ class ContributorPdfUploader {
     }
   }
 
-  Future<void> chooseAndUpload(String noteId) async {
+  /// Returns false when the user cancels the picker; no success message then.
+  Future<bool> chooseAndUpload(String noteId) async {
     final selected = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['pdf'],
       allowMultiple: false,
       withData: false,
     );
-    if (selected == null || selected.files.isEmpty) return;
+    if (selected == null || selected.files.isEmpty) return false;
     final picked = selected.files.single;
     final path = picked.path;
     if (path == null) throw const FormatException('Unable to open selected file.');
@@ -87,5 +88,6 @@ class ContributorPdfUploader {
     if (verified['ok'] != true) {
       throw const FormatException('PDF verification failed.');
     }
+    return true;
   }
 }
