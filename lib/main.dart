@@ -5,7 +5,6 @@ import 'contributor_avatar.dart';
 import 'contributor_api.dart';
 import 'contributor_challenge.dart';
 import 'contributor_draft_details_page.dart';
-import 'contributor_recovery_page.dart';
 
 void main() => runApp(const ContributorsApp());
 
@@ -313,17 +312,7 @@ class _ContributorHomeState extends State<ContributorHome> {
           FilledButton.icon(onPressed: busy ? null : _signIn,
             icon: const Icon(Icons.login), label: const Text('Sign in')),
           const SizedBox(height: 12),
-          TextButton.icon(
-            onPressed: busy ? null : () async {
-              await Navigator.of(context).push(MaterialPageRoute<void>(
-                builder: (_) => ContributorRecoveryPage(api: api),
-              ));
-            },
-            icon: const Icon(Icons.help_outline),
-            label: const Text('Forgot password? Reset with email code'),
-          ),
-          const SizedBox(height: 8),
-          const Text('New student registration remains on smiunotes.com.',
+          const Text('Registration and password recovery remain on smiunotes.com.',
             textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
         ],
       ),
