@@ -24,6 +24,30 @@ void main() {
     }
   });
 
+  test('Four-device login limit has specific recovery message', () {
+    final message = contributorAuthError(
+      const ContributorApiException(409, 'Maximum device limit reached.'));
+    expect(message, contains('Four active devices'));
+    expect(message, contains('Active devices'));
+    expect(message, isNot(contains('invalid password')));
+  });
+
+  test('Contributor and administrator workspace roles are both permitted', () {
+    final message = contributorAuthError(
+      const ContributorApiException(403, 'Contributor access required.'));
+    expect(message, contains('contributors and administrators'));
+    expect(message, contains('Contributor Workspace'));
+  });
+
+  test('Authentication failures remain distinguishable', () {
+    expect(contributorAuthError(const ContributorApiException(401,
+      'Invalid credentials or verification.')), contains('password'));
+    expect(contributorAuthError(const ContributorApiException(503,
+      'Sign-in temporarily unavailable.')), contains('temporarily'));
+    expect(contributorAuthError(const ContributorApiException(403,
+      'Security verification required.')), contains('Security verification'));
+  });
+
   test('Missing or malformed session response fails closed', () {
     for (final response in [
       <String, dynamic>{},
