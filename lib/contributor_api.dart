@@ -70,7 +70,7 @@ class ContributorSession {
       throw const FormatException('Invalid sign-in response');
     }
     final a = raw['access_token'], r = raw['refresh_token'];
-    if (a is! String || a.length < 30 || r is! String || r.length < 20) {
+    if (a is! String || a.length < 30 || r is! String || r.length < 12) {
       throw const FormatException('Invalid session');
     }
     return ContributorSession(a, r);
