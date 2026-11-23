@@ -193,7 +193,10 @@ class ContributorApi {
     try {
       // The server must authorize the contributor/admin before persistence.
       await workspace();
-      await _save(next);
+      // The access token might have rotated during workspace authorization.
+      // Persist the CURRENT pair, never overwrite a single-use refresh token
+      // with the obsolete initial login response.
+      await _save(session ?? next);
     } catch (_) {
       try {
         await _send('/api/mobile/v1/session',
@@ -231,8 +234,8 @@ class ContributorApi {
       return true;
     } on ContributorApiException catch (error) {
       if (error.status == 401 || error.status == 403) {
-        // 401 already tried token rotation via request(); 403 is a confirmed
-        // contributor privilege rejection, not a connectivity issue.
+        // On a genuine revoked identity we clear credentials; a transient
+        // route/rate-limit/5xx error must not behave like logout.
         await _clear();
         return false;
       }
