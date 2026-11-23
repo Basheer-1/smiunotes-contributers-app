@@ -119,8 +119,10 @@ class _ContributorHomeState extends State<ContributorHome> {
   Future<void> _openProfileDevices() async {
     final uri = Uri.parse('https://smiunotes.com/profile');
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (mounted) setState(() => error =
-          'Open smiunotes.com/profile in your browser to manage devices.');
+      if (mounted) {
+        setState(() => error =
+            'Open smiunotes.com/profile in your browser to manage devices.');
+      }
     }
   }
 
