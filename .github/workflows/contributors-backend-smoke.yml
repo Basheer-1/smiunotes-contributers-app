@@ -74,3 +74,17 @@ jobs:
           check "Page conversion ticket" 403 POST "$base/contributor-render" "{\"op\":\"status\",\"id\":\"$id\"}"
           check "Draft edit" 403 PATCH "$base/contributor-notes/$id" "{\"title\":\"Example\",\"description\":\"Description\",\"subject_id\":\"$id\"}"
           check "Draft deletion" 403 DELETE "$base/contributor-notes/$id"
+      - name: Verify anonymous logout cannot revoke any device
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl -sS -o "$RUNNER_TEMP/logout-denied.json" -w '%{http_code}' \
+            --max-time 20 --retry 2 --retry-delay 2 \
+            -H 'Content-Type: application/json' \
+            -d '{"op":"logout_all"}' \
+            https://smiunotes.com/api/mobile/v1/session)"
+          if [[ "$status" != "401" ]]; then
+            echo "FAIL: anonymous logout returned HTTP $status; expected 401" >&2
+            exit 1
+          fi
+          echo "PASS: anonymous logout denied"
