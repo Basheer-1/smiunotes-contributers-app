@@ -320,7 +320,7 @@ class _ContributorHomeState extends State<ContributorHome> {
               ));
             },
             icon: const Icon(Icons.help_outline),
-            label: const Text('Recover your account'),
+            label: const Text('Forgot password? Reset with email code'),
           ),
           const SizedBox(height: 8),
           const Text('New student registration remains on smiunotes.com.',
