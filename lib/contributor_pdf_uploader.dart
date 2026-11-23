@@ -6,8 +6,9 @@ import 'contributor_api.dart';
 /// Uploads only PDFs to short-lived server-issued R2 capabilities.
 /// The mobile API and Edge function both recheck role, ownership and draft.
 class ContributorPdfUploader {
-  const ContributorPdfUploader(this.api);
+  ContributorPdfUploader(this.api);
   final ContributorApi api;
+  String? lastUploadedFileName;
 
   Future<bool> originalExists(String noteId) async {
     final response = await api.request('/api/mobile/v1/contributor-media',
@@ -88,6 +89,7 @@ class ContributorPdfUploader {
     if (verified['ok'] != true) {
       throw const FormatException('PDF verification failed.');
     }
+    lastUploadedFileName = picked.name;
     return true;
   }
 }
