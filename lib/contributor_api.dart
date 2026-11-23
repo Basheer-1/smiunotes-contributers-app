@@ -190,22 +190,23 @@ class ContributorApi {
           'password': password, 'turnstileToken': challenge});
     final next = ContributorSession.parse(result);
     session = next;
+    // Persist an authenticated session immediately so that a temporary
+    // contributor-workspace outage cannot create an orphan device slot.
+    await _save(next);
     try {
-      // The server must authorize the contributor/admin before persistence.
+      // The server authorizes both approved contributors and site admins;
+      // the native UI always remains the contributor-only workspace.
       await workspace();
-      // The access token might have rotated during workspace authorization.
-      // Persist the CURRENT pair, never overwrite a single-use refresh token
-      // with the obsolete initial login response.
-      await _save(session ?? next);
-    } catch (_) {
-      try {
-        await _send('/api/mobile/v1/session',
-            authenticate: true, method: 'POST', body: {'op': 'logout'});
-      } catch (_) {
-        // Never retain tokens from a rejected initial login.
-      } finally {
-        await _clear();
+    } on ContributorApiException catch (error) {
+      if (error.status == 403 || error.status == 401) {
+        // A confirmed access rejection is NOT a contributor login.
+        try {
+          await signOut();
+        } catch (_) {
+          await _clear();
+        }
       }
+      // Network/429/5xx errors preserve the verified, encrypted login.
       rethrow;
     }
   }
