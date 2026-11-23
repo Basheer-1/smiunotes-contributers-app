@@ -327,13 +327,18 @@ class ContributorApi {
 
   Future<void> signOut() async {
     final current = session;
-    try {
-      if (current != null) {
-        await _send('/api/mobile/v1/session', authenticate: true,
-            method: 'POST', body: {'op': 'logout'});
-      }
-    } finally {
+    if (current == null) {
       await _clear();
+      return;
     }
+    // Never claim a device has been signed out if the network or backend
+    // could not confirm revocation; otherwise its GoTrue slot is stranded.
+    final result = await request('/api/mobile/v1/session',
+        method: 'POST', body: {'op': 'logout'});
+    if (result['signed_out'] != true) {
+      throw const ContributorApiException(503,
+          'Could not confirm device sign-out. Retry when online.');
+    }
+    await _clear();
   }
 }
