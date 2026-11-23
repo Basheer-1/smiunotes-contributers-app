@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'contributor_avatar.dart';
 import 'contributor_api.dart';
 import 'contributor_challenge.dart';
@@ -115,16 +114,6 @@ class _ContributorHomeState extends State<ContributorHome> {
   }
 
   String _safeError(Object error) => contributorAuthError(error);
-
-  Future<void> _openProfileDevices() async {
-    final uri = Uri.parse('https://smiunotes.com/profile');
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (mounted) {
-        setState(() => error =
-            'Open smiunotes.com/profile in your browser to manage devices.');
-      }
-    }
-  }
 
   Future<void> _refresh() async {
     if (!authenticated || busy) return;
@@ -255,10 +244,6 @@ class _ContributorHomeState extends State<ContributorHome> {
           FilledButton.icon(onPressed: busy ? null : _signIn,
             icon: const Icon(Icons.login), label: const Text('Sign in')),
           const SizedBox(height: 12),
-          TextButton.icon(
-            onPressed: _openProfileDevices,
-            icon: const Icon(Icons.devices_outlined),
-            label: const Text('Manage active devices (maximum 4)')),
           const Text('Registration and password recovery remain on smiunotes.com.',
             textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
         ],
