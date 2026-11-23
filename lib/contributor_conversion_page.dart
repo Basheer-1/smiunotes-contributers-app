@@ -38,6 +38,12 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
         render = response['render'] is Map<String, dynamic>
             ? response['render'] as Map<String, dynamic> : null;
       });
+    } on ContributorApiException catch (e) {
+      if (mounted) {
+        setState(() => error = e.status == 404
+            ? 'Native PDF conversion is awaiting a server update. Your draft is safe.'
+            : 'Unable to fetch conversion status. Retry when online.');
+      }
     } catch (_) {
       if (mounted) setState(() => error = 'Unable to fetch conversion status.');
     } finally {
@@ -54,6 +60,13 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
         setState(() { done = current; total = pages; stage = message; });
       });
       await _checkStatus();
+    } on ContributorApiException catch (e) {
+      if (mounted) {
+        setState(() => error = e.status == 404
+          ? 'Native PDF conversion is awaiting a server update. Your draft is safe.'
+          : 'Could not finish conversion. Reset partial pages before retrying.');
+      }
+      await _checkStatus(preserveError: true);
     } catch (_) {
       if (mounted) {
         setState(() => error =
