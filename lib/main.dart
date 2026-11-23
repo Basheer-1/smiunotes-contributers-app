@@ -110,7 +110,7 @@ class _ContributorHomeState extends State<ContributorHome> {
   String _safeError(Object error) {
     final message = error.toString().replaceFirst(RegExp(r'^(HttpException|Bad state): ?'), '');
     if (message.contains('Contributor API is not deployed')) {
-      return 'Sign-in was accepted, but the Contributors backend is not deployed yet. Please update the app after the server fix.';
+      return 'This feature is awaiting a Contributors backend deployment. Your saved login is unaffected.';
     }
     if (message.contains('Approved contributor access required') ||
         message.contains('Contributor access required')) {
@@ -405,10 +405,14 @@ class _ContributorHomeState extends State<ContributorHome> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Original PDF uploaded and verified. Page conversion is still required before admin review.')));
                       await _refresh();
-                    } catch (_) {
+                    } catch (e) {
                       if (mounted) {
+                        final message = e is ContributorApiException &&
+                            e.status == 404
+                            ? 'PDF upload is not live yet. Your private draft is safe.'
+                            : 'PDF upload was not completed. Check the file or retry.';
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('PDF upload was not completed. Check the file or retry.')));
+                          SnackBar(content: Text(message)));
                       }
                     }
                   },
