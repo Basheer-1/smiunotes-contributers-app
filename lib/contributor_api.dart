@@ -227,25 +227,56 @@ class ContributorApi {
     }
   }
 
-  /// The same private administrator-review endpoint as smiunotes.com/recover.
-  /// Never changes the account or reveals whether a Student ID/email exists.
-  Future<String> requestAccountRecovery(
-      String studentId, String email, String details, String challenge) async {
+  /// Mirrors the website password-reset flow: the server sends an OTP only
+  /// to the pre-linked email address, never to a caller-provided mailbox.
+  Future<String> sendPasswordResetCode(String studentId, String captcha) async {
     final response = await request('/api/mobile/v1/auth',
-        authenticate: false,
-        body: {
-          'op': 'recover',
-          'studentId': studentId.trim().toUpperCase(),
-          'email': email.trim().toLowerCase(),
-          'details': details.trim(),
-          'turnstileToken': challenge,
-        });
-    final message = response['message'];
-    if (message is! String || message.isEmpty) {
+      authenticate: false,
+      body: {
+        'op': 'send',
+        'studentId': studentId.trim().toUpperCase(),
+        'turnstileToken': captcha,
+      },
+    );
+    final challenge = response['challenge'];
+    if (challenge is! String ||
+        !RegExp(r'^[0-9a-f-]{36}$', caseSensitive: false)
+            .hasMatch(challenge)) {
       throw const ContributorApiException(503,
-          'Recovery request confirmation unavailable.');
+          'Unable to start password reset. Please retry later.');
     }
-    return message;
+    return challenge;
+  }
+
+  /// Verify the linked-email OTP and set a new password through the same
+  /// student-auth broker used by the website. Do not persist the temporary
+  /// reset session in the Contributors App.
+  Future<void> resetPasswordWithCode(
+      String challenge, String code, String newPassword) async {
+    final response = await request('/api/mobile/v1/auth',
+      authenticate: false,
+      body: {
+        'op': 'verify',
+        'challenge': challenge,
+        'code': code,
+        'newPassword': newPassword,
+      },
+    );
+    // The OTP exchange creates a temporary Supabase Auth session. Release
+    // its device slot after the password update, then require a fresh login.
+    final resetSession = ContributorSession.parse(response);
+    if (session != null) {
+      throw const ContributorApiException(409,
+          'Sign out before resetting your account password.');
+    }
+    session = resetSession;
+    try {
+      await signOut();
+    } on ContributorApiException {
+      // The password was changed already. Keep the temporary session in
+      // memory so it can be explicitly revoked on retry.
+      rethrow;
+    }
   }
 
   Future<void> signIn(String id, String password, String challenge) async {
