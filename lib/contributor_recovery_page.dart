@@ -1,92 +1,115 @@
 import 'package:material_ui/material_ui.dart';
-
+import 'package:flutter/services.dart';
 import 'contributor_api.dart';
 import 'contributor_challenge.dart';
 
-/// Same validation and private administrator-review flow as smiunotes.com/recover.
-/// This is not a password reset, and never establishes account ownership.
-String? validateContributorRecovery(
-    String studentId, String email, String details) {
-  final normalizedId = studentId.trim().toUpperCase();
-  final normalizedEmail = email.trim().toLowerCase();
-  final explanation = details.trim();
-  if (!RegExp(r'^[A-Z0-9][A-Z0-9-]{0,31}$').hasMatch(normalizedId)) {
-    return 'Enter your Student ID in the correct format.';
-  }
-  if (normalizedEmail.length > 254 ||
-      !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(normalizedEmail)) {
-    return 'Enter a valid contact email address.';
-  }
-  if (explanation.length < 10 || explanation.length > 2000 ||
-      RegExp(r'[\x00-\x1f\x7f]').hasMatch(explanation)) {
-    return 'Explain the issue in 10–2,000 characters.';
+/// Same Student ID, linked-email OTP and new-password checks as SMIUNotes web.
+String? validateResetStudentId(String input) {
+  final id = input.trim().toUpperCase();
+  if (!RegExp(r'^[A-Z0-9][A-Z0-9-]{0,31}$').hasMatch(id)) {
+    return 'Enter a valid Student ID.';
   }
   return null;
 }
 
+String? validateResetPassword(String password, String confirmation) {
+  if (password.length < 12 || password.length > 128) {
+    return 'Use a password of 12–128 characters.';
+  }
+  if (password != confirmation) return 'Passwords do not match.';
+  return null;
+}
+
+/// This screen does not ask for email or an explanation. OTP is delivered
+/// only to the mailbox already associated with the Student ID on the server.
 class ContributorRecoveryPage extends StatefulWidget {
   const ContributorRecoveryPage({super.key, required this.api});
   final ContributorApi api;
 
   @override
-  State<ContributorRecoveryPage> createState() =>
-      _ContributorRecoveryPageState();
+  State<ContributorRecoveryPage> createState() => _ContributorRecoveryPageState();
 }
 
 class _ContributorRecoveryPageState extends State<ContributorRecoveryPage> {
   final studentId = TextEditingController();
-  final email = TextEditingController();
-  final explanation = TextEditingController();
-  bool submitting = false;
+  final code = TextEditingController();
+  final newPassword = TextEditingController();
+  final confirmPassword = TextEditingController();
+  String? challenge;
   String? error;
-  String? confirmation;
+  bool submitting = false;
+  bool completed = false;
 
   @override
   void dispose() {
     studentId.dispose();
-    email.dispose();
-    explanation.dispose();
+    code.dispose();
+    newPassword.dispose();
+    confirmPassword.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
+  Future<void> _sendCode() async {
     if (submitting) return;
-    final validation = validateContributorRecovery(
-      studentId.text, email.text, explanation.text);
+    final validation = validateResetStudentId(studentId.text);
     if (validation != null) {
       setState(() => error = validation);
       return;
     }
-    setState(() {
-      submitting = true;
-      error = null;
-    });
+    setState(() { submitting = true; error = null; });
     try {
-      // The same production Turnstile widget used for native sign-in.
-      final token = await requestContributorChallenge(context);
-      if (!mounted || token == null || token.isEmpty) return;
-      final response = await widget.api.requestAccountRecovery(
-        studentId.text, email.text, explanation.text, token);
+      final proof = await requestContributorChallenge(context);
+      if (!mounted || proof == null || proof.isEmpty) return;
+      final value = await widget.api.sendPasswordResetCode(studentId.text, proof);
       if (!mounted) return;
-      setState(() {
-        confirmation = response;
-        error = null;
-      });
+      setState(() { challenge = value; error = null; });
     } on ContributorApiException catch (e) {
       if (!mounted) return;
-      setState(() {
-        error = e.status == 403
-            ? 'Security verification expired or failed. Please retry.'
-            : e.status == 400
-                ? 'Check your Student ID, email and explanation, then retry.'
-                : e.status == 429
-                    ? 'Too many requests. Please try again later.'
-                    : 'Recovery request could not be submitted. Please retry later.';
-      });
+      setState(() => error = e.status == 403
+        ? 'Security verification failed. Please try again.'
+        : e.status == 429
+          ? 'Too many requests. Please retry later.'
+          : 'Could not send the code. Please retry later.');
     } catch (_) {
       if (mounted) {
-        setState(() => error =
-            'Could not connect to SMIUNotes. Check your internet and retry.');
+        setState(() => error = 'Unable to connect. Check your internet.');
+      }
+    } finally {
+      if (mounted) setState(() => submitting = false);
+    }
+  }
+
+  Future<void> _resetPassword() async {
+    if (submitting || challenge == null) return;
+    if (!RegExp(r'^\d{6}$').hasMatch(code.text.trim())) {
+      setState(() => error = 'Enter the 6-digit verification code.');
+      return;
+    }
+    final validation = validateResetPassword(
+      newPassword.text, confirmPassword.text);
+    if (validation != null) {
+      setState(() => error = validation);
+      return;
+    }
+    setState(() { submitting = true; error = null; });
+    try {
+      await widget.api.resetPasswordWithCode(
+        challenge!, code.text.trim(), newPassword.text);
+      if (!mounted) return;
+      newPassword.clear();
+      confirmPassword.clear();
+      code.clear();
+      setState(() { completed = true; challenge = null; });
+    } on ContributorApiException catch (e) {
+      if (!mounted) return;
+      setState(() => error = e.status == 400 || e.status == 401
+        ? 'Code is invalid or expired. Request a new code if needed.'
+        : e.status == 409
+          ? 'This reset created an active session. Sign out before retrying.'
+          : 'Could not complete password reset. Try again later.');
+    } catch (_) {
+      if (mounted) {
+        setState(() => error = 'Unable to complete password reset. Try again.');
       }
     } finally {
       if (mounted) setState(() => submitting = false);
@@ -97,115 +120,113 @@ class _ContributorRecoveryPageState extends State<ContributorRecoveryPage> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Account recovery')),
+      appBar: AppBar(title: const Text('Reset password')),
       body: SafeArea(child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
         children: [
-          Text('Recover your student access',
+          Icon(completed ? Icons.verified_outlined
+                : Icons.lock_reset_outlined,
+            size: 48, color: colors.primary),
+          const SizedBox(height: 16),
+          Text(completed ? 'Password updated' : 'Reset your password',
+            textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w800)),
-          const SizedBox(height: 10),
-          Text(
-            'Lost your email, or someone claimed your Student ID? '
-            'Request a private administrator review.',
+          const SizedBox(height: 12),
+          Text(completed
+            ? 'You can now sign in with your Student ID and new password.'
+            : challenge == null
+              ? 'Enter your existing Student ID. We will send a code only '
+                'to your linked email so you can securely reset your password.'
+              : 'Enter the verification code sent to your linked email, '
+                'then choose your new password.',
+            textAlign: TextAlign.center,
             style: TextStyle(color: colors.onSurfaceVariant)),
-          const SizedBox(height: 24),
-          if (confirmation != null) ...[
-            Card(child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.mark_email_read_outlined,
-                    size: 36, color: colors.primary),
-                  const SizedBox(height: 12),
-                  const Text('Request submitted',
-                    style: TextStyle(fontWeight: FontWeight.w800,
-                        fontSize: 19)),
-                  const SizedBox(height: 10),
-                  Text(confirmation!),
-                  const SizedBox(height: 12),
-                  const Text('Your account has not been changed. '
-                    'The team will review eligible requests privately.'),
-                ],
-              ),
-            )),
-            const SizedBox(height: 16),
+          const SizedBox(height: 28),
+          if (completed) ...[
             FilledButton.icon(
               onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.arrow_back),
-              label: const Text('Back to sign in')),
-          ] else ...[
+              icon: const Icon(Icons.login),
+              label: const Text('Back to sign in'),
+            ),
+          ] else if (challenge == null) ...[
             TextField(
               controller: studentId,
               enabled: !submitting,
-              maxLength: 32,
               textCapitalization: TextCapitalization.characters,
-              textInputAction: TextInputAction.next,
+              maxLength: 32,
+              autofillHints: const [AutofillHints.username],
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _sendCode(),
               decoration: const InputDecoration(
                 labelText: 'Student ID',
                 prefixIcon: Icon(Icons.badge_outlined),
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: submitting ? null : _sendCode,
+              icon: const Icon(Icons.mail_outline),
+              label: Text(submitting ? 'Sending…' : 'Send verification code'),
+            ),
+          ] else ...[
             TextField(
-              controller: email,
+              controller: code,
               enabled: !submitting,
-              maxLength: 254,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.next,
-              autofillHints: const [AutofillHints.email],
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              maxLength: 6,
+              autofillHints: const [AutofillHints.oneTimeCode],
               decoration: const InputDecoration(
-                labelText: 'Contact email',
-                prefixIcon: Icon(Icons.alternate_email),
+                labelText: '6-digit verification code',
+                prefixIcon: Icon(Icons.password),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: newPassword,
+              enabled: !submitting,
+              obscureText: true,
+              autofillHints: const [AutofillHints.newPassword],
+              decoration: const InputDecoration(
+                labelText: 'New password (12–128 characters)',
+                prefixIcon: Icon(Icons.lock_outline),
               ),
             ),
             const SizedBox(height: 14),
             TextField(
-              controller: explanation,
+              controller: confirmPassword,
               enabled: !submitting,
-              maxLength: 2000,
-              minLines: 4,
-              maxLines: 7,
-              keyboardType: TextInputType.multiline,
+              obscureText: true,
               decoration: const InputDecoration(
-                labelText: 'Explain the lost mailbox or disputed claim',
-                hintText: 'Describe what happened and how we can reach you.',
-                alignLabelWithHint: true,
+                labelText: 'Confirm new password',
+                prefixIcon: Icon(Icons.lock_outline),
               ),
             ),
-            const SizedBox(height: 12),
-            Card(
-              color: colors.surfaceContainerLow,
-              child: const Padding(
-                padding: EdgeInsets.all(14),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.privacy_tip_outlined, size: 22),
-                    SizedBox(width: 12),
-                    Expanded(child: Text(
-                      'Do not send passwords, OTPs or copies of identity '
-                      'documents. Submitting this request does not verify '
-                      'Student ID ownership or change the account.')),
-                  ],
-                ),
-              ),
-            ),
-            if (error != null) Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(error!, style: TextStyle(color: colors.error)),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             FilledButton.icon(
-              onPressed: submitting ? null : _submit,
-              icon: submitting
-                  ? const SizedBox(width: 18, height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.send_outlined),
-              label: Text(submitting ? 'Submitting…' : 'Request review'),
+              onPressed: submitting ? null : _resetPassword,
+              icon: const Icon(Icons.verified_user_outlined),
+              label: Text(submitting ? 'Updating…' : 'Verify code and reset password'),
+            ),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: submitting ? null : () => setState(() {
+                challenge = null;
+                error = null;
+                code.clear();
+              }),
+              child: const Text('Request a new code'),
             ),
           ],
+          if (submitting) const Padding(
+            padding: EdgeInsets.only(top: 14),
+            child: LinearProgressIndicator(),
+          ),
+          if (error != null) Padding(
+            padding: const EdgeInsets.only(top: 18),
+            child: Text(error!, style: TextStyle(color: colors.error)),
+          ),
         ],
       )),
     );
