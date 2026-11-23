@@ -1,0 +1,36 @@
+name: Contributor Render Request Diagnostics
+on:
+  push:
+    paths: ['.github/workflows/contributor-render-diagnostics.yml']
+permissions:
+  contents: read
+jobs:
+  public-input-diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Compare safe anonymous request parsing
+        run: |
+          node <<'NODE'
+          const url = 'https://smiunotes.com/api/mobile/v1/contributor-render';
+          const id = '00000000-0000-4000-8000-000000000001';
+          const bodies = [
+            {op:'status',id},
+            {op:'reset',id},
+            {op:'preview',id,page:1},
+            {op:'begin',id,sha:'0'.repeat(64),count:1},
+          ];
+          (async()=>{
+            for(const body of bodies){
+              const response=await fetch(url,{
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify(body)
+              });
+              const value=await response.text();
+              console.log(body.op, response.status, value.slice(0,200));
+              if(response.status !== 400 && response.status !== 403)
+                throw Error('Unexpected anonymous response on '+body.op);
+            }
+          })().catch(error=>{console.error(error.message);process.exitCode=1});
+          NODE
