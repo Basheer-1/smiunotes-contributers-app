@@ -17,6 +17,49 @@ class ContributorApiException implements Exception {
   String toString() => message;
 }
 
+/// User-safe login diagnostics. Never include passwords, IDs or tokens.
+String contributorAuthError(Object error) {
+  if (error is ContributorApiException) {
+    final message = error.message.toLowerCase();
+    if (error.status == 409 || message.contains('maximum device limit')) {
+      return 'Four active devices are already signed in. Open SMIUNotes '
+          'Profile > Active devices and sign out an old device, then retry.';
+    }
+    if (error.status == 403 &&
+        (message.contains('security verification') ||
+         message.contains('turnstile'))) {
+      return 'Security verification expired or failed. Retry sign in.';
+    }
+    if (error.status == 403 &&
+        (message.contains('contributor') || message.contains('approved'))) {
+      return 'Only approved contributors and administrators can open the '
+          'Contributors App. Both use the same Contributor Workspace.';
+    }
+    if (error.status == 401 && message.contains('invalid credentials')) {
+      return 'Student ID or password was not accepted. Check your existing '
+          'SMIUNotes credentials. You can recover access on the website.';
+    }
+    if (error.status == 401) {
+      return 'Your session has expired. Sign in again.';
+    }
+    if (error.status == 429) {
+      return 'Too many attempts. Try again later.';
+    }
+    if (error.status == 503) {
+      return 'The SMIUNotes sign-in service is temporarily unavailable. '
+          'Your account is not necessarily invalid.';
+    }
+    if (error.status == 404) {
+      return 'This Contributors feature is awaiting a backend update.';
+    }
+  }
+  if (error is SocketException || error is TimeoutException ||
+      error is HandshakeException) {
+    return 'Cannot connect to SMIUNotes right now. Check your internet.';
+  }
+  return 'Unable to complete sign-in. Retry or open SMIUNotes account settings.';
+}
+
 class ContributorSession {
   const ContributorSession(this.accessToken, this.refreshToken);
   final String accessToken;
