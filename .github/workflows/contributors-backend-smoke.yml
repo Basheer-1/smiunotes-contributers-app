@@ -48,3 +48,29 @@ jobs:
             exit 1
           fi
           node -e 'const fs=require("fs");const o=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/workspace.json"));if(typeof o.error!=="string"||"notes" in o||"profile" in o)process.exit(1);console.log("PASS: workspace denies anonymous access without leaking account data")'
+      - name: Verify all private media endpoints enforce authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://smiunotes.com/api/mobile/v1"
+          id="00000000-0000-4000-8000-000000000001"
+          check() {
+            local label="$1" expected="$2" method="$3" endpoint="$4" payload="${5:-}"
+            local args=(-sS --max-time 20 -o "$RUNNER_TEMP/check.json" -w '%{http_code}' -X "$method" -H 'Content-Type: application/json')
+            if [[ -n "$payload" ]]; then
+              args+=(-d "$payload")
+            fi
+            local status
+            status="$(curl "${args[@]}" "$endpoint")"
+            if [[ "$status" != "$expected" ]]; then
+              echo "FAIL $label: got $status expected $expected" >&2
+              cat "$RUNNER_TEMP/check.json" >&2
+              exit 1
+            fi
+            echo "PASS $label: HTTP $status"
+          }
+          check "Original PDF ticket" 401 POST "$base/contributor-media" "{\"op\":\"prepare\",\"id\":\"$id\",\"bytes\":1024}"
+          check "Original PDF removal" 401 POST "$base/contributor-media" "{\"op\":\"remove\",\"id\":\"$id\"}"
+          check "Page conversion ticket" 403 POST "$base/contributor-render" "{\"op\":\"status\",\"id\":\"$id\"}"
+          check "Draft edit" 403 PATCH "$base/contributor-notes/$id" "{\"title\":\"Example\",\"description\":\"Description\",\"subject_id\":\"$id\"}"
+          check "Draft deletion" 403 DELETE "$base/contributor-notes/$id"
