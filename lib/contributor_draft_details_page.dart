@@ -50,10 +50,12 @@ class _ContributorDraftDetailsPageState
 
   Future<void> _loadStatus() async {
     if (noteId.isEmpty) {
-      if (mounted) setState(() {
-        loading = false;
-        message = 'Note identifier missing. Reopen this note.';
-      });
+      if (mounted) {
+        setState(() {
+          loading = false;
+          message = 'Note identifier missing. Reopen this note.';
+        });
+      }
       return;
     }
     if (mounted) setState(() { loading = true; message = null; });
@@ -79,10 +81,12 @@ class _ContributorDraftDetailsPageState
         pagesReady = ready;
       });
     } catch (_) {
-      if (mounted) setState(() {
-        pdfExists = null;
-        message = 'Unable to check your original PDF. Check your connection and retry.';
-      });
+      if (mounted) {
+        setState(() {
+          pdfExists = null;
+          message = 'Unable to check your original PDF. Check your connection and retry.';
+        });
+      }
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -163,8 +167,10 @@ class _ContributorDraftDetailsPageState
       });
       await widget.onChanged();
     } catch (_) {
-      if (mounted) setState(() =>
-          message = 'Could not remove PDF. Reset converted pages first, or retry.');
+      if (mounted) {
+        setState(() => message =
+            'Could not remove PDF. Reset converted pages first, or retry.');
+      }
       await _loadStatus();
     } finally {
       if (mounted) setState(() { working = false; action = ''; });
@@ -241,14 +247,20 @@ class _ContributorDraftDetailsPageState
                   try {
                     await widget.api.updateDraft(noteId, t, d, selected!);
                     await widget.onChanged();
-                    if (dialogContext.mounted) Navigator.pop(dialogContext);
-                    if (mounted) setState(() =>
-                        message = 'Draft details updated. Reopen to see the latest title.');
+                    if (dialogContext.mounted) {
+                      Navigator.pop(dialogContext);
+                    }
+                    if (mounted) {
+                      setState(() => message =
+                          'Draft details updated. Reopen to see the latest title.');
+                    }
                   } catch (_) {
-                    if (dialogContext.mounted) update(() {
-                      fieldError = 'Unable to save changes. Please retry.';
-                      saving = false;
-                    });
+                    if (dialogContext.mounted) {
+                      update(() {
+                        fieldError = 'Unable to save changes. Please retry.';
+                        saving = false;
+                      });
+                    }
                   }
                 },
                 child: Text(saving ? 'Saving…' : 'Save changes')),
@@ -284,13 +296,17 @@ class _ContributorDraftDetailsPageState
     try {
       await widget.api.deleteDraft(noteId);
       await widget.onChanged();
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        Navigator.pop(context);
+      }
     } catch (_) {
-      if (mounted) setState(() {
-        message = 'Draft could not be deleted. Nothing was changed.';
-        working = false;
-        action = '';
-      });
+      if (mounted) {
+        setState(() {
+          message = 'Draft could not be deleted. Nothing was changed.';
+          working = false;
+          action = '';
+        });
+      }
     }
   }
 
