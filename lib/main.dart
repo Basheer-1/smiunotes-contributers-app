@@ -44,6 +44,8 @@ class _ContributorHomeState extends State<ContributorHome> {
   final api = ContributorApi();
   bool restoring = true, busy = false, authenticated = false;
   int selected = 0;
+  String notesQuery = '';
+  String notesStatus = 'all';
   String? error;
   Map<String, dynamic>? workspace;
   Map<String, dynamic>? inbox;
@@ -318,11 +320,48 @@ class _ContributorHomeState extends State<ContributorHome> {
   }
 
   Widget _notes() {
-    final notes = _items('notes');
+    final allNotes = _items('notes');
+    final query = notesQuery.trim().toLowerCase();
+    final notes = allNotes.where((note) {
+      final status = (note['status'] ?? '').toString().toLowerCase();
+      if (notesStatus != 'all' && status != notesStatus) {
+        return false;
+      }
+      if (query.isEmpty) return true;
+      return (note['title'] ?? '').toString().toLowerCase().contains(query) ||
+          (note['description'] ?? '').toString().toLowerCase().contains(query);
+    }).toList();
     return _scroll([
-      _heading('Manage notes', 'Your drafts and published contributions'),
-      if (notes.isEmpty) const Card(child:
-        ListTile(title: Text('No notes uploaded yet'))),
+      _heading('Manage notes', 'Search and filter your own contributions'),
+      TextField(
+        onChanged: (value) => setState(() => notesQuery = value),
+        decoration: const InputDecoration(
+          prefixIcon: Icon(Icons.search),
+          labelText: 'Search notes',
+          hintText: 'Title or description',
+        ),
+      ),
+      const SizedBox(height: 12),
+      Wrap(spacing: 8, children: [
+        for (final status in const ['all', 'draft', 'published'])
+          ChoiceChip(
+            label: Text(status == 'all' ? 'All' :
+              status == 'draft' ? 'Drafts' : 'Published'),
+            selected: notesStatus == status,
+            onSelected: (_) => setState(() => notesStatus = status),
+          ),
+      ]),
+      const SizedBox(height: 10),
+      Text('${notes.length} of ${allNotes.length} notes'),
+      const SizedBox(height: 10),
+      if (notes.isEmpty)
+        Card(child: ListTile(
+          title: Text(allNotes.isEmpty
+            ? 'No notes uploaded yet' : 'No matching notes'),
+          subtitle: Text(allNotes.isEmpty
+            ? 'Create a private draft from the Upload tab.'
+            : 'Try a different search or status filter.'),
+        )),
       ...notes.map(_noteTile),
     ]);
   }
