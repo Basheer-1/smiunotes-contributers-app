@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 
 import 'contributor_api.dart';
@@ -25,6 +24,57 @@ class ContributorPageConverter {
     if (response['ok'] != true) throw const FormatException('Render reset failed.');
   }
 
+  /// Obtain the already-verified original through the owner-only API.
+  /// The signed URL is short-lived; bytes remain in a temporary file until
+  /// conversion finishes and are never saved to public or gallery storage.
+  Future<File> _fetchOriginal(String noteId) async {
+    final ticket = await api.request('/api/mobile/v1/contributor-media',
+      body: {'op': 'original', 'id': noteId});
+    final raw = ticket['url'];
+    final uri = raw is String ? Uri.tryParse(raw) : null;
+    if (uri == null || uri.scheme != 'https' || uri.userInfo.isNotEmpty ||
+        uri.host.isEmpty) {
+      throw const FormatException('Invalid private PDF read link.');
+    }
+    final directory = await Directory.systemTemp.createTemp('smiunotes-pdf-');
+    final result = File('${directory.path}/original.pdf');
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+    try {
+      final request = await client.getUrl(uri).timeout(const Duration(seconds: 15));
+      request.followRedirects = false;
+      final response = await request.close().timeout(const Duration(seconds: 20));
+      if (response.statusCode != 200 ||
+          (response.contentLength > 20 * 1024 * 1024)) {
+        throw const HttpException('Private PDF download was not accepted.');
+      }
+      var count = 0;
+      final sink = result.openWrite();
+      try {
+        await for (final chunk in response.timeout(const Duration(seconds: 40))) {
+          count += chunk.length;
+          if (count > 20 * 1024 * 1024) {
+            throw const FormatException('Original PDF exceeds the file size limit.');
+          }
+          sink.add(chunk);
+        }
+      } finally {
+        await sink.close();
+      }
+      if (count < 20) throw const FormatException('Original PDF is empty.');
+      final header = await result.openRead(0, 5).first;
+      if (header.length < 5 ||
+          String.fromCharCodes(header.take(5)) != '%PDF-') {
+        throw const FormatException('Original file is not a valid PDF.');
+      }
+      return result;
+    } catch (_) {
+      if (await directory.exists()) await directory.delete(recursive: true);
+      rethrow;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
   Future<void> convert(
     String noteId,
     void Function(int done, int total, String stage) onProgress,
@@ -39,14 +89,10 @@ class ContributorPageConverter {
     if (!await ContributorPdfUploader(api).originalExists(noteId)) {
       throw StateError('Upload the original PDF before preparing pages.');
     }
-    final selection = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['pdf'],
-      withData: false,
-    );
-    if (selection == null || selection.files.isEmpty) return;
-    final path = selection.files.single.path;
-    if (path == null) throw const FormatException('Unable to open PDF.');
+    onProgress(0, 0, 'Downloading your already-uploaded private PDF');
+    final original = await _fetchOriginal(noteId);
+    try {
+    final path = original.path;
     final inspection = await _channel.invokeMapMethod<String, dynamic>(
       'inspect', {'path': path});
     if (inspection == null) throw const FormatException('PDF inspection failed.');
@@ -130,5 +176,9 @@ class ContributorPageConverter {
       throw const FormatException('Page verification was not completed.');
     }
     onProgress(count, count, 'Ready for admin review');
+    } finally {
+      final directory = original.parent;
+      if (await directory.exists()) await directory.delete(recursive: true);
+    }
   }
 }
