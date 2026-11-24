@@ -262,10 +262,28 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
                   child: Text(previewError, style: TextStyle(
                     color: Theme.of(context).colorScheme.error)),
                 ),
-              Image.network(previewUrl!, fit: BoxFit.contain,
-                gaplessPlayback: true,
-                errorBuilder: (context, error, stackTrace) =>
-                  const Text('Image expired; reopen preview.')),
+              // Use a fixed viewport so the surrounding ListView never
+              // jumps or relayouts when page images have different sizes.
+              SizedBox(
+                key: const Key('stable-contributor-preview'),
+                height: MediaQuery.sizeOf(context).height * .56,
+                width: double.infinity,
+                child: ColoredBox(
+                  color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                  child: Center(
+                    child: Image.network(previewUrl!,
+                      key: ValueKey(previewPage),
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.contain,
+                      gaplessPlayback: true,
+                      errorBuilder: (context, error, stackTrace) =>
+                        const Center(child: Text(
+                          'Unable to display page. Retry using the arrows.')),
+                    ),
+                  ),
+                ),
+              ),
             ],
             const SizedBox(height: 8),
             const Text('The Contributors App prepares pages. Publishing is handled by authorized administrators.'),
