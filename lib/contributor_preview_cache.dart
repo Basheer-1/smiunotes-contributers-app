@@ -8,10 +8,12 @@ import 'contributor_api.dart';
 /// page never needs another signed URL. All data is discarded when the viewer
 /// closes; the private pages are never written to public device storage.
 class ContributorPreviewCache {
-  ContributorPreviewCache(this.api, this.noteId, {this.capacity = 5});
+  ContributorPreviewCache(this.api, this.noteId,
+      {this.capacity = 5, this.pageLoader});
   final ContributorApi api;
   final String noteId;
   final int capacity;
+  final Future<Uint8List> Function(int page)? pageLoader;
   final Map<int, Uint8List> _pages = {};
   final Map<int, Future<Uint8List>> _pending = {};
   bool _disposed = false;
@@ -45,6 +47,11 @@ class ContributorPreviewCache {
   }
 
   Future<Uint8List> _fetch(int page) async {
+    if (pageLoader != null) {
+      final image = await pageLoader!(page);
+      if (!_disposed) { _remember(page, image); }
+      return image;
+    }
     final response = await api.request('/api/mobile/v1/contributor-render',
       body: {'op': 'preview', 'id': noteId, 'page': page});
     final raw = response['url'];
@@ -70,16 +77,18 @@ class ContributorPreviewCache {
       }
       final image = bytes.takeBytes();
       if (image.length < 16) throw const FormatException('Empty preview image.');
-      if (!_disposed) {
-        _pages.remove(page);
-        _pages[page] = image;
-        while (_pages.length > capacity) {
-          _pages.remove(_pages.keys.first);
-        }
-      }
+      if (!_disposed) { _remember(page, image); }
       return image;
     } finally {
       client.close(force: true);
+    }
+  }
+
+  void _remember(int page, Uint8List image) {
+    _pages.remove(page);
+    _pages[page] = image;
+    while (_pages.length > capacity) {
+      _pages.remove(_pages.keys.first);
     }
   }
 
