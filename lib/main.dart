@@ -153,7 +153,7 @@ class _ContributorHomeState extends State<ContributorHome> {
       final result = await api.workspace();
       if (!mounted) return;
       password.clear();
-      setState(() { authenticated = true; workspace = result; selected = 0; });
+      setState(() { authenticated = true; workspace = result; avatarFuture = null; selected = 0; });
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -250,6 +250,11 @@ class _ContributorHomeState extends State<ContributorHome> {
           ),
         ]),
         actions: [
+          if (authenticated && selected == 4)
+            IconButton(key: const Key('return-to-workspace'),
+              tooltip: 'Back to workspace',
+              onPressed: () => _changeTab(0),
+              icon: const Icon(Icons.arrow_back_rounded)),
           IconButton(
             tooltip: widget.darkMode ? 'Switch to light theme' : 'Switch to dark theme',
             onPressed: widget.onThemeToggle,
@@ -262,10 +267,26 @@ class _ContributorHomeState extends State<ContributorHome> {
             icon: const Icon(Icons.notifications_none_rounded, size: 20)),
           if (authenticated) InkWell(
             key: const Key('contributor-header-avatar'),
-            onTap: () => _changeTab(3),
-            child: const Padding(padding: EdgeInsets.symmetric(horizontal: 10),
-              child: CircleAvatar(radius: 15, backgroundColor: Color(0xFF386D89),
-                child: Icon(Icons.person_outline, size: 17))),
+            onTap: _openProfile,
+            child: Padding(padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: FutureBuilder<Uint8List?>(
+                future: avatarFuture ??= ContributorAvatar(api).load(),
+                builder: (context, snapshot) {
+                  final bytes = snapshot.data;
+                  final profile = workspace?['profile'] as Map<String, dynamic>? ?? {};
+                  final name = profile['student_name']?.toString() ?? '';
+                  return CircleAvatar(
+                    radius: 15,
+                    backgroundColor: const Color(0xFF386D89),
+                    backgroundImage: bytes != null && bytes.isNotEmpty
+                      ? MemoryImage(bytes) : null,
+                    child: bytes != null && bytes.isNotEmpty ? null :
+                      Text(name.isEmpty ? '?' : name[0].toUpperCase(),
+                        style: const TextStyle(fontSize: 12,
+                          fontWeight: FontWeight.w700)),
+                  );
+                },
+              )),
           ),
         ],
       ),
@@ -619,6 +640,32 @@ class _ContributorHomeState extends State<ContributorHome> {
             if (mounted) _changeTab(0);
           }),
     ]);
+  }
+
+  Future<void> _openProfile() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: const Color(0xFF102032),
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: SizedBox(height: MediaQuery.sizeOf(sheetContext).height * .78,
+          child: Column(children: [
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Row(children: [
+                const Expanded(child: Text('Contributor profile',
+                  style: TextStyle(fontWeight: FontWeight.w800))),
+                IconButton(
+                  key: const Key('close-contributor-profile'),
+                  tooltip: 'Close profile',
+                  onPressed: () => Navigator.pop(sheetContext),
+                  icon: const Icon(Icons.close)),
+              ])),
+            Expanded(child: _profile()),
+          ])),
+      ),
+    );
   }
 
   Widget _profile() {
