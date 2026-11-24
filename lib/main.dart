@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'contributor_avatar.dart';
@@ -29,6 +30,20 @@ class _ContributorsAppState extends State<ContributorsApp> {
   void initState() {
     super.initState();
     _restoreTheme();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _requestNotificationPermission();
+    });
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    try {
+      await const MethodChannel('smiunotes/contributor_notifications')
+          .invokeMethod<bool>('requestPermission');
+    } on MissingPluginException {
+      // Non-Android runtime: permission bridge unavailable.
+    } on PlatformException {
+      // Denying notifications must never block contributor sign-in.
+    }
   }
 
   Future<void> _restoreTheme() async {
