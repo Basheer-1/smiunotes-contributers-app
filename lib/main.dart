@@ -496,7 +496,6 @@ class _ContributorHomeState extends State<ContributorHome> {
 
   Widget _noteTile(Map<String, dynamic> note) {
     final status = note['status']?.toString() ?? 'draft';
-    final colors = Theme.of(context).colorScheme;
     final subjectMatches = _items('subjects').where(
       (item) => item['id'] == note['subject_id']).toList();
     final subject = subjectMatches.isEmpty ? null : subjectMatches.first;
