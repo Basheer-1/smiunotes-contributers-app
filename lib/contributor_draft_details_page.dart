@@ -33,6 +33,7 @@ class _ContributorDraftDetailsPageState
   bool pagesReady = false;
   int activeStep = 2;
   bool reviewedPages = false;
+  bool finishedReview = false;
   String? message;
   String? uploadedFilename;
   String action = '';
@@ -506,21 +507,32 @@ class _ContributorDraftDetailsPageState
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
               value: reviewedPages,
-              onChanged: pagesReady ? (value) => setState(
-                () => reviewedPages = value == true) : null,
+              onChanged: pagesReady ? (value) => setState(() {
+                reviewedPages = value == true;
+                finishedReview = false;
+              }) : null,
               title: const Text('I reviewed the converted pages'),
               subtitle: const Text('Publishing remains administrator-controlled.',
                 style: TextStyle(fontSize: 11)),
             )),
             const SizedBox(height: 12),
-            if (pagesReady && reviewedPages)
+            SizedBox(width: double.infinity, child: FilledButton.icon(
+              key: const Key('contributor-finish-review'),
+              onPressed: pagesReady && reviewedPages
+                ? () => setState(() => finishedReview = true) : null,
+              icon: const Icon(Icons.check_circle_outline),
+              label: Text(finishedReview ? 'Review completed' :
+                'Finish contributor review'),
+            )),
+            const SizedBox(height: 9),
+            if (pagesReady && finishedReview)
               _panel(const ListTile(
                 leading: Icon(Icons.verified_outlined,
                   color: Color(0xFF4CCFAA)),
                 title: Text('Ready for administrator review'),
-                subtitle: Text('No additional publish action is required in '
-                  'the Contributors App. Authorized administrators publish '
-                  'from the website after review.')))
+                subtitle: Text('The draft and prepared pages are ready for the website administrator. '
+                  'This review confirmation is local to the app; it does not '
+                  'publish or submit a new server status.')))
             else
               const Text('Finish PDF preparation and review each page.',
                 style: TextStyle(fontSize: 12)),
