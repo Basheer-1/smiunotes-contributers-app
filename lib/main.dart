@@ -267,19 +267,21 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
       appBar: AppBar(
         toolbarHeight: 53,
         titleSpacing: 12,
-        title: Row(children: [
-          const Text('SMIU', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
-          const Text('Contributor', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-          const SizedBox(width: 8),
-          if (authenticated) Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            decoration: BoxDecoration(color: const Color(0xFF192D40),
-              borderRadius: BorderRadius.circular(12)),
-            child: Text(((workspace?['upload_scope'] as Map?)?['role'] ?? 'Staff')
-              .toString().toUpperCase(),
-              style: const TextStyle(fontSize: 9, color: Color(0xFFA3CDE5))),
-          ),
-        ]),
+        // The title owns only the space remaining after the action icons.
+        // Avoid role chips in this narrow app bar: on smaller phones those
+        // would overflow into the theme and notification controls.
+        title: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('SMIUNotes',
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+            Text('Contributor workspace',
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 10, color: Color(0xFFA8C1D6))),
+          ],
+        ),
         actions: [
           if (authenticated && selected == 4)
             IconButton(key: const Key('return-to-workspace'),
