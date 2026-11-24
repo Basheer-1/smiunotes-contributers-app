@@ -332,7 +332,7 @@ class _ContributorDraftDetailsPageState
   Widget _progress() => Container(
     padding: const EdgeInsets.all(4),
     decoration: BoxDecoration(
-      color: const Color(0xFF192A3C),
+      color: Theme.of(context).colorScheme.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(11)),
     child: Row(children: [
       for (final entry in [(1, 'Details'), (2, 'Prepare PDF'), (3, 'Review')])
@@ -347,13 +347,16 @@ class _ContributorDraftDetailsPageState
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: activeStep == entry.$1
-                ? const Color(0xFF396D89) : Colors.transparent,
+                ? Theme.of(context).colorScheme.primary : Colors.transparent,
               borderRadius: BorderRadius.circular(8)),
             child: Text(
               entry.$1 == 1 || (entry.$1 == 2 && pagesReady)
                 ? '✓ ${entry.$2}' : '${entry.$1}. ${entry.$2}',
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 10,
+                color: activeStep == entry.$1
+                  ? Theme.of(context).colorScheme.onPrimary
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
                 fontWeight: activeStep == entry.$1
                   ? FontWeight.w800 : FontWeight.w500)),
           ),
@@ -382,7 +385,7 @@ class _ContributorDraftDetailsPageState
           _progress(),
           const SizedBox(height: 17),
           Text('Draft · ${widget.note['title'] ?? 'Untitled'}',
-            style: const TextStyle(color: Color(0xFF9DC6DE),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 11, fontWeight: FontWeight.w700),
             maxLines: 2, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 8),
@@ -417,8 +420,8 @@ class _ContributorDraftDetailsPageState
                   Text(uploadedFilename == null
                     ? 'Your original PDF stays private. Readers see only protected pages.'
                     : 'Uploaded: $uploadedFilename',
-                    style: const TextStyle(fontSize: 12,
-                      color: Color(0xFFAAC1D5))),
+                    style: TextStyle(fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   if (!pagesReady) Align(alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: working || loading ? null : _removePdf,
