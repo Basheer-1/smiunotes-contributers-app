@@ -394,18 +394,6 @@ class _ContributorHomeState extends State<ContributorHome> {
     ]),
   );
 
-  Widget _stat(String label, Object value, IconData icon) => Card(
-    child: Padding(padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(height: 13),
-        Text('$value', style: const TextStyle(
-          fontSize: 28, fontWeight: FontWeight.w800)),
-        Text(label),
-      ]),
-    ),
-  );
-
   Widget _dashboard() {
     final profile = workspace?['profile'] as Map<String, dynamic>? ?? {};
     final counts = workspace?['counts'] as Map<String, dynamic>? ?? {};
