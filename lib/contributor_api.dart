@@ -309,10 +309,45 @@ class ContributorApi {
     return response['cleared'] is int ? response['cleared'] as int : 0;
   }
 
-  Future<void> createDraft(
+  Future<String> createDraft(
       String title, String description, String subjectId) async {
-    await request('/api/mobile/v1/contributor-workspace',
+    final result = await request('/api/mobile/v1/contributor-workspace',
         body: {'title': title, 'description': description, 'subject_id': subjectId});
+    final id = result['id'];
+    if (result['ok'] != true || id is! String ||
+        !RegExp(r'^[0-9a-fA-F-]{36}
+
+  Future<void> updateDraft(String id, String title, String description,
+      String subjectId) async {
+    await request('/api/mobile/v1/contributor-notes/$id', method: 'PATCH',
+      body: {'title': title, 'description': description, 'subject_id': subjectId});
+  }
+
+  Future<void> deleteDraft(String id) async {
+    await request('/api/mobile/v1/contributor-notes/$id', method: 'DELETE');
+  }
+
+  Future<void> signOut() async {
+    final current = session;
+    if (current == null) {
+      await _clear();
+      return;
+    }
+    // Never claim a device has been signed out if the network or backend
+    // could not confirm revocation; otherwise its GoTrue slot is stranded.
+    final result = await request('/api/mobile/v1/session',
+        method: 'POST', body: {'op': 'logout'});
+    if (result['signed_out'] != true) {
+      throw const ContributorApiException(503,
+          'Could not confirm device sign-out. Retry when online.');
+    }
+    await _clear();
+  }
+}
+).hasMatch(id)) {
+      throw const ContributorApiException(502, 'Draft confirmation unavailable.');
+    }
+    return id;
   }
 
   Future<void> updateDraft(String id, String title, String description,
