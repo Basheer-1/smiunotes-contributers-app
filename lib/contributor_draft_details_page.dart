@@ -31,6 +31,8 @@ class _ContributorDraftDetailsPageState
   bool working = false;
   bool? pdfExists;
   bool pagesReady = false;
+  int activeStep = 2;
+  bool reviewedPages = false;
   String? message;
   String? uploadedFilename;
   String action = '';
@@ -79,6 +81,7 @@ class _ContributorDraftDetailsPageState
       setState(() {
         pdfExists = present;
         pagesReady = ready;
+        if (ready) activeStep = 3;
       });
     } catch (_) {
       if (mounted) {
@@ -310,146 +313,224 @@ class _ContributorDraftDetailsPageState
     }
   }
 
-  Widget _step(IconData icon, String title, String subtitle, bool completed) {
-    final colors = Theme.of(context).colorScheme;
-    return Card(
-      child: ListTile(
-        leading: Icon(completed ? Icons.check_circle : icon,
-            color: completed ? colors.primary : colors.onSurfaceVariant),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Text(subtitle),
-      ),
-    );
-  }
+  Widget _panel(Widget child) => Container(
+    padding: const EdgeInsets.all(13),
+    decoration: BoxDecoration(
+      color: const Color(0xFF192A3C),
+      borderRadius: BorderRadius.circular(11),
+      border: Border.all(color: const Color(0xFF2A4257))),
+    child: child,
+  );
+
+  Widget _progress() => Container(
+    padding: const EdgeInsets.all(4),
+    decoration: BoxDecoration(
+      color: const Color(0xFF192A3C),
+      borderRadius: BorderRadius.circular(11)),
+    child: Row(children: [
+      for (final entry in [(1, 'Details'), (2, 'Prepare PDF'), (3, 'Review')])
+        Expanded(child: InkWell(
+          key: Key('draft-step-${entry.$1}'),
+          onTap: entry.$1 == 1 ? _edit :
+              entry.$1 == 2 || pagesReady
+                ? () => setState(() => activeStep = entry.$1) : null,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: activeStep == entry.$1
+                ? const Color(0xFF396D89) : Colors.transparent,
+              borderRadius: BorderRadius.circular(8)),
+            child: Text(
+              entry.$1 == 1 || (entry.$1 == 2 && pagesReady)
+                ? '✓ ${entry.$2}' : '${entry.$1}. ${entry.$2}',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 10,
+                fontWeight: activeStep == entry.$1
+                  ? FontWeight.w800 : FontWeight.w500)),
+          ),
+        )),
+    ]),
+  );
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Note details'), actions: [
-        if (isDraft)
+      appBar: AppBar(
+        title: const Text('Workspace', style: TextStyle(fontSize: 14)),
+        actions: [
+          Chip(label: Text('Step $activeStep of 3',
+            style: const TextStyle(fontSize: 10))),
           IconButton(
             tooltip: 'Refresh PDF status',
             onPressed: working || loading ? null : _loadStatus,
-            icon: const Icon(Icons.refresh)),
-      ]),
+            icon: const Icon(Icons.refresh_rounded, size: 18)),
+        ],
+      ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
+        key: const Key('contributor-three-step-workflow'),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 95),
         children: [
-          Text(widget.note['title']?.toString() ?? 'Untitled draft',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800)),
+          _progress(),
+          const SizedBox(height: 17),
+          Text('Draft · ${widget.note['title'] ?? 'Untitled'}',
+            style: const TextStyle(color: Color(0xFF9DC6DE),
+              fontSize: 11, fontWeight: FontWeight.w700),
+            maxLines: 2, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 8),
-          Text(widget.note['description']?.toString() ?? '',
-              style: TextStyle(color: colors.onSurfaceVariant)),
-          const SizedBox(height: 12),
-          Chip(
-            avatar: Icon(isDraft ? Icons.edit_note : Icons.verified,
-                color: colors.primary, size: 18),
-            label: Text(isDraft ? 'Private draft' : 'Published note')),
-          if (!isDraft) ...[
-            const SizedBox(height: 12),
-            _step(Icons.check_circle, 'Published',
-                'This contribution is available on SMIUNotes.', true),
-          ] else ...[
-            const SizedBox(height: 16),
-            Text('Your progress', style: Theme.of(context)
-                .textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 6),
-            _step(Icons.edit_note, '1. Draft saved',
-                'Your note details are safely saved.', true),
-            _step(Icons.picture_as_pdf, '2. Original PDF',
-                loading
-                    ? 'Checking private storage…'
-                    : pdfExists == true
-                        ? 'Uploaded and verified'
-                        : pdfExists == false
-                            ? 'No PDF uploaded yet'
-                            : 'Status unavailable — refresh to retry',
-                pdfExists == true),
-            _step(Icons.auto_fix_high, '3. Watermarked pages',
-                pagesReady
-                    ? 'Ready for administrator review'
-                    : 'Prepare pages after the PDF is uploaded',
-                pagesReady),
+          if (!isDraft)
+            _panel(const ListTile(
+              leading: Icon(Icons.verified_rounded),
+              title: Text('Published'),
+              subtitle: Text('This note is already live on SMIUNotes.')))
+          else if (activeStep == 2) ...[
+            const Text('Prepare PDF pages', style: TextStyle(
+              fontSize: 17, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
             if (loading || working) ...[
-              const SizedBox(height: 10),
               const LinearProgressIndicator(),
-              if (action.isNotEmpty) Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(action)),
+              const SizedBox(height: 7),
+              Text(action.isNotEmpty ? action : 'Checking private PDF status…'),
             ],
-            if (message != null) Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Card(
-                color: colors.surfaceContainerHighest,
-                child: Padding(padding: const EdgeInsets.all(14),
-                  child: Text(message!)),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text('Original PDF', style: Theme.of(context)
-              .textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
+            if (message != null) ...[
+              const SizedBox(height: 9),
+              _panel(Text(message!)),
+            ],
             if (pdfExists == true) ...[
-              Card(child: ListTile(
-                leading: Icon(Icons.task_alt, color: colors.primary),
-                title: const Text('PDF uploaded successfully'),
-                subtitle: Text(uploadedFilename == null
-                    ? 'Original PDF is stored privately in SMIUNotes.'
-                    : 'File: $uploadedFilename'),
-              )),
-              const SizedBox(height: 8),
-              if (!pagesReady)
-                OutlinedButton.icon(
-                  onPressed: working || loading ? null : _removePdf,
-                  icon: const Icon(Icons.swap_horiz),
-                  label: const Text('Remove PDF to upload another'),
-                ),
-              if (pagesReady)
-                const Text('To replace the PDF, reset converted pages first.'),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: working || loading ? null : _convert,
-                icon: Icon(pagesReady ? Icons.visibility : Icons.auto_fix_high),
-                label: Text(pagesReady
-                    ? 'View watermarked pages'
-                    : 'Next: prepare watermarked pages'),
-              ),
+              _panel(Column(crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(children: [
+                    Icon(Icons.check_circle, color: Color(0xFF4CCFAA), size: 18),
+                    SizedBox(width: 6),
+                    Text('PDF uploaded', style: TextStyle(
+                      color: Color(0xFF4CCFAA), fontWeight: FontWeight.w800)),
+                  ]),
+                  const SizedBox(height: 7),
+                  Text(uploadedFilename == null
+                    ? 'Your original PDF stays private. Readers see only protected pages.'
+                    : 'Uploaded: $uploadedFilename',
+                    style: const TextStyle(fontSize: 12,
+                      color: Color(0xFFAAC1D5))),
+                  if (!pagesReady) Align(alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: working || loading ? null : _removePdf,
+                      child: const Text('Replace PDF'))),
+                ])),
+              const SizedBox(height: 11),
+              _panel(Column(crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('NEXT STEP · REQUIRED',
+                    style: TextStyle(fontSize: 10,
+                      color: Color(0xFF9FC6DE), fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+                  Text(pagesReady ? 'Watermarked pages ready' :
+                    'Prepare your PDF for viewing', style:
+                    const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                  const SizedBox(height: 7),
+                  const Text('Convert your uploaded PDF into protected WebP pages. '
+                    'Page verification must finish before administrator review.',
+                    style: TextStyle(fontSize: 12,
+                      color: Color(0xFFA6BACD))),
+                  const SizedBox(height: 12),
+                  const Text('1. Generate protected pages\n'
+                    '2. Preview and verify every converted page\n'
+                    '3. Administrator approves and publishes',
+                    style: TextStyle(fontSize: 11, height: 1.7)),
+                  const SizedBox(height: 10),
+                  SizedBox(width: double.infinity,
+                    child: FilledButton(
+                      onPressed: working || loading ? null : _convert,
+                      child: Text(pagesReady ? 'View prepared PDF pages' :
+                        'Prepare pages for review →'))),
+                ])),
+              const SizedBox(height: 10),
+              if (pagesReady) FilledButton(
+                key: const Key('contributor-next-review'),
+                onPressed: () => setState(() => activeStep = 3),
+                child: const Text('Next: Review pages')),
             ] else ...[
-              Card(child: ListTile(
-                leading: const Icon(Icons.upload_file_outlined),
-                title: const Text('No PDF uploaded yet'),
-                subtitle: const Text('Choose a PDF of up to 20 MiB. '
-                    'The upload will be verified before you continue.'),
-              )),
+              _panel(const ListTile(
+                leading: Icon(Icons.picture_as_pdf_outlined),
+                title: Text('Upload your original PDF'),
+                subtitle: Text('Choose a PDF up to 20 MiB. '
+                  'The private upload is verified before continuing.'))),
               const SizedBox(height: 12),
               FilledButton.icon(
+                key: const Key('contributor-upload-pdf'),
                 onPressed: pdfExists == false && !loading && !working
-                    ? _upload : null,
-                icon: const Icon(Icons.picture_as_pdf),
-                label: const Text('Choose and upload PDF'),
-              ),
+                  ? _upload : null,
+                icon: const Icon(Icons.upload_file),
+                label: const Text('Choose and upload PDF')),
             ],
-            const SizedBox(height: 20),
+          ] else if (activeStep == 3) ...[
+            const Text('Review & submit for publishing',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            _panel(Column(crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Icon(pagesReady ? Icons.check_circle_outline
+                      : Icons.pending_actions_outlined,
+                    color: pagesReady ? const Color(0xFF4CCFAA) : Colors.amber,
+                    size: 20),
+                  const SizedBox(width: 7),
+                  Expanded(child: Text(pagesReady
+                    ? 'Watermarked pages prepared'
+                    : 'Page preparation incomplete',
+                    style: const TextStyle(fontWeight: FontWeight.w800))),
+                ]),
+                const SizedBox(height: 8),
+                const Text('Preview every converted page to confirm readability '
+                  'before the administrator publishes this contribution.',
+                  style: TextStyle(fontSize: 12)),
+                const SizedBox(height: 10),
+                FilledButton.tonalIcon(
+                  onPressed: pagesReady && !working ? _convert : null,
+                  icon: const Icon(Icons.visibility_outlined),
+                  label: const Text('Review prepared pages')),
+              ])),
+            const SizedBox(height: 12),
+            _panel(CheckboxListTile(
+              key: const Key('contributor-review-confirmation'),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: reviewedPages,
+              onChanged: pagesReady ? (value) => setState(
+                () => reviewedPages = value == true) : null,
+              title: const Text('I reviewed the converted pages'),
+              subtitle: const Text('Publishing remains administrator-controlled.',
+                style: TextStyle(fontSize: 11)),
+            )),
+            const SizedBox(height: 12),
+            if (pagesReady && reviewedPages)
+              _panel(const ListTile(
+                leading: Icon(Icons.verified_outlined,
+                  color: Color(0xFF4CCFAA)),
+                title: Text('Ready for administrator review'),
+                subtitle: Text('No additional publish action is required in '
+                  'the Contributors App. Authorized administrators publish '
+                  'from the website after review.')))
+            else
+              const Text('Finish PDF preparation and review each page.',
+                style: TextStyle(fontSize: 12)),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: () => setState(() => activeStep = 2),
+              child: const Text('Back to PDF preparation')),
+          ],
+          if (isDraft) ...[
+            const SizedBox(height: 18),
             const Divider(),
-            Text('Draft settings', style: Theme.of(context)
-                .textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: working ? null : _edit,
-              icon: const Icon(Icons.edit_outlined),
-              label: const Text('Edit draft details'),
-            ),
-            const SizedBox(height: 8),
+              icon: const Icon(Icons.edit_outlined, size: 17),
+              label: const Text('Edit draft details')),
+            const SizedBox(height: 7),
             TextButton.icon(
               onPressed: working ? null : _delete,
-              icon: Icon(Icons.delete_outline, color: colors.error),
-              label: Text('Delete draft', style: TextStyle(color: colors.error)),
-            ),
-            const SizedBox(height: 12),
-            Text('Only an administrator can publish your finished draft.',
-                style: TextStyle(color: colors.onSurfaceVariant)),
+              icon: const Icon(Icons.delete_outline, size: 17),
+              label: const Text('Delete draft and PDF')),
           ],
         ],
       ),
