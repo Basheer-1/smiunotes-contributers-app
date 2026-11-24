@@ -405,11 +405,11 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
             style: TextStyle(fontSize: 22, height: 1.22,
               letterSpacing: -.35, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
-          const Text('Sign in with your SMIUNotes Student ID. '
+          Text('Sign in with your SMIUNotes Student ID. '
             'Approved contributors and administrators use the same secure workspace.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12, height: 1.5,
-              color: Color(0xFF9FB7CB))),
+              color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 24),
           ContributorGlass(
             padding: const EdgeInsets.all(18),
@@ -446,10 +446,10 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
             ]),
           ),
           const SizedBox(height: 19),
-          const Text('Registration and password recovery remain on '
+          Text('Registration and password recovery remain on '
             'smiunotes.com. Two-factor security verification is required.',
             style: TextStyle(fontSize: 11, height: 1.5,
-              color: Color(0xFF94AABF)),
+              color: Theme.of(context).colorScheme.onSurfaceVariant),
             textAlign: TextAlign.center),
         ],
       ),
@@ -776,9 +776,9 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(data.$1.toUpperCase(), style: const TextStyle(
+            Text(data.$1.toUpperCase(), style: TextStyle(
               fontSize: 10, letterSpacing: 1.05, fontWeight: FontWeight.w700,
-              color: Color(0xFF9FBAD0))),
+              color: Theme.of(context).colorScheme.onSurfaceVariant)),
             const SizedBox(height: 5),
             Text(data.$2, style: const TextStyle(
               fontSize: 14, height: 1.35, fontWeight: FontWeight.w600)),
