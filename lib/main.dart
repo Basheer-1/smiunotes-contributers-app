@@ -77,14 +77,26 @@ class _ContributorsAppState extends State<ContributorsApp> {
         onSurfaceVariant: const Color(0xFFB7C9DE),
         outlineVariant: const Color(0xFF324862),
       ),
-      scaffoldBackgroundColor: const Color(0xFF0B1725),
-      cardTheme: CardThemeData(color: const Color(0xE21A2B3D), elevation: 0,
+      scaffoldBackgroundColor: Colors.transparent,
+      appBarTheme: const AppBarTheme(backgroundColor: Color(0xE60C1B29),
+        surfaceTintColor: Colors.transparent),
+      cardTheme: CardThemeData(color: const Color(0xD91A2B3D), elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
       inputDecorationTheme: const InputDecorationTheme(
         border: OutlineInputBorder(),
       ),
     ),
     themeMode: darkMode ? ThemeMode.dark : ThemeMode.light,
+    builder: (context, child) => DecoratedBox(
+      decoration: BoxDecoration(gradient: LinearGradient(
+        begin: Alignment.topLeft, end: Alignment.bottomRight,
+        colors: darkMode
+          ? const [Color(0xFF091522), Color(0xFF122B3A), Color(0xFF091522)]
+          : const [Color(0xFFF4FAFF), Color(0xFFE7F1FA), Color(0xFFF4FAFF)],
+        stops: const [0, .55, 1],
+      )),
+      child: child ?? const SizedBox.shrink(),
+    ),
     home: ContributorHome(
       darkMode: darkMode, onThemeToggle: _toggleTheme,
     ),
