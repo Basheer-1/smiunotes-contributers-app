@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'contributor_api.dart';
 import 'contributor_pdf_uploader.dart';
 import 'contributor_conversion_page.dart';
+import 'contributor_glass.dart';
 
 /// A dedicated, beginner-friendly draft workflow. All media state comes from
 /// the server; the UI never assumes that an original PDF exists.
@@ -324,13 +325,8 @@ class _ContributorDraftDetailsPageState
     }
   }
 
-  Widget _panel(Widget child) => Container(
-    padding: const EdgeInsets.all(13),
-    decoration: BoxDecoration(
-      color: const Color(0xFF192A3C),
-      borderRadius: BorderRadius.circular(11),
-      border: Border.all(color: const Color(0xFF2A4257))),
-    child: child,
+  Widget _panel(Widget child) => ContributorGlass(
+    padding: const EdgeInsets.all(13), child: child,
   );
 
   Widget _progress() => Container(
