@@ -33,7 +33,7 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
     });
     try {
       final response = await converter.status(widget.noteId);
-      if (!mounted) return;
+      if (!mounted) { return; }
       setState(() {
         render = response['render'] is Map<String, dynamic>
             ? response['render'] as Map<String, dynamic> : null;
@@ -111,7 +111,7 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
   Future<void> _showPreview(int page) async {
     // Keep the existing image and the surrounding page in place while the
     // next short-lived signed URL is fetched and decoded.
-    if (previewLoading || busy || converting || page < 1) return;
+    if (previewLoading || busy || converting || page < 1) { return; }
     setState(() { previewLoading = true; previewError = ''; });
     try {
       final response = await widget.api.request(
@@ -135,10 +135,12 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
         previewPage = page;
       });
     } catch (_) {
-      if (mounted) setState(() =>
-        previewError = 'Could not load this page. Retry using the arrow.');
+      if (mounted) {
+        setState(() => previewError =
+          'Could not load this page. Retry using the arrow.');
+      }
     } finally {
-      if (mounted) setState(() => previewLoading = false);
+      if (mounted) { setState(() => previewLoading = false); }
     }
   }
 
