@@ -310,9 +310,11 @@ class ContributorApi {
   }
 
   Future<String> createDraft(
-      String title, String description, String subjectId) async {
+      String title, String description, String subjectId,
+      {bool verifiedOnly = false}) async {
     final result = await request('/api/mobile/v1/contributor-workspace',
-        body: {'title': title, 'description': description, 'subject_id': subjectId});
+        body: {'title': title, 'description': description,
+          'subject_id': subjectId, 'is_sensitive': verifiedOnly});
     final newId = result['id'];
     if (result['ok'] != true || newId is! String || newId.length != 36 ||
         !RegExp(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
@@ -323,9 +325,10 @@ class ContributorApi {
   }
 
   Future<void> updateDraft(String id, String title, String description,
-      String subjectId) async {
+      String subjectId, {bool verifiedOnly = false}) async {
     await request('/api/mobile/v1/contributor-notes/$id', method: 'PATCH',
-      body: {'title': title, 'description': description, 'subject_id': subjectId});
+      body: {'title': title, 'description': description,
+        'subject_id': subjectId, 'is_sensitive': verifiedOnly});
   }
 
   Future<void> deleteDraft(String id) async {
