@@ -70,7 +70,7 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
     } catch (_) {
       if (mounted) {
         setState(() => error =
-          'Conversion was not completed. Use the same PDF as the original. '
+          'Conversion was not completed. The already-uploaded original remains private. '
           'If interrupted, reset the conversion before retrying.');
       }
       await _checkStatus(preserveError: true);
@@ -185,7 +185,7 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
             label: const Text('Prepare pages for publishing →'),
           ),
           const SizedBox(height: 8),
-          const Text('Choose the same original PDF from your phone. A SHA-256 fingerprint is checked against the uploaded document before finalization.'),
+          const Text('The already-uploaded original PDF is fetched securely and converted automatically. No second file selection is needed.'),
         ],
         if (render != null) ...[
           Card(child: ListTile(
@@ -197,6 +197,12 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
           )),
           const SizedBox(height: 10),
           if (status == 'ready') ...[
+            SizedBox(width: double.infinity, child: FilledButton.icon(
+              key: const Key('conversion-continue-step3'),
+              onPressed: busy ? null : () => Navigator.pop(context, true),
+              icon: const Icon(Icons.arrow_forward),
+              label: const Text('Continue to Step 3 · Review'))),
+            const SizedBox(height: 10),
             FilledButton.icon(
               onPressed: busy ? null : () => _showPreview(1),
               icon: const Icon(Icons.visibility_outlined),
@@ -205,6 +211,11 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
             if (previewUrl != null) ...[
               const SizedBox(height: 16),
               Row(children: [
+                IconButton(
+                  key: const Key('conversion-close-preview'),
+                  tooltip: 'Close preview',
+                  onPressed: () => setState(() => previewUrl = null),
+                  icon: const Icon(Icons.close)),
                 IconButton(
                   onPressed: previewPage > 1 && !busy
                       ? () => _showPreview(previewPage - 1) : null,
