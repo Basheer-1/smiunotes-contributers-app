@@ -15,9 +15,9 @@ class ContributorConversionPage extends StatefulWidget {
 class _ContributorConversionPageState extends State<ContributorConversionPage> {
   late final ContributorPageConverter converter = ContributorPageConverter(widget.api);
   Map<String, dynamic>? render;
-  bool busy = true, converting = false;
+  bool busy = true, converting = false, previewLoading = false;
   int done = 0, total = 0, previewPage = 1;
-  String stage = '', error = '';
+  String stage = '', error = '', previewError = '';
   String? previewUrl;
 
   @override
@@ -99,7 +99,8 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
     try {
       await converter.reset(widget.noteId);
       if (!mounted) return;
-      setState(() { render = null; previewUrl = null; previewPage = 1; });
+      setState(() { render = null; previewUrl = null; previewPage = 1;
+        previewError = ''; previewLoading = false; });
     } catch (_) {
       if (mounted) setState(() => error = 'Reset could not be completed. Retry later.');
     } finally {
@@ -108,21 +109,36 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
   }
 
   Future<void> _showPreview(int page) async {
-    if (busy) return;
-    setState(() { busy = true; error = ''; });
+    // Keep the existing image and the surrounding page in place while the
+    // next short-lived signed URL is fetched and decoded.
+    if (previewLoading || busy || converting || page < 1) return;
+    setState(() { previewLoading = true; previewError = ''; });
     try {
-      final response = await widget.api.request('/api/mobile/v1/contributor-render',
-        body: {'op': 'preview', 'id': widget.noteId, 'page': page});
-      final url = response['url'];
-      final uri = Uri.tryParse(url is String ? url : '');
-      if (uri == null || uri.scheme != 'https' || uri.userInfo.isNotEmpty) {
+      final response = await widget.api.request(
+        '/api/mobile/v1/contributor-render',
+        body: {'op': 'preview', 'id': widget.noteId, 'page': page},
+      );
+      final raw = response['url'];
+      final uri = Uri.tryParse(raw is String ? raw : '');
+      if (uri == null || uri.scheme != 'https' ||
+          uri.host.isEmpty || uri.userInfo.isNotEmpty) {
         throw const FormatException('Invalid preview URL');
       }
-      if (mounted) setState(() { previewUrl = uri.toString(); previewPage = page; });
+      if (!mounted) return;
+      // Decode the new image before switching it in. This avoids a blank
+      // full-screen image flash on Next/Previous. No document is reloaded.
+      await precacheImage(NetworkImage(uri.toString()), context)
+          .timeout(const Duration(seconds: 20));
+      if (!mounted) return;
+      setState(() {
+        previewUrl = uri.toString();
+        previewPage = page;
+      });
     } catch (_) {
-      if (mounted) setState(() => error = 'Preview unavailable. Please retry.');
+      if (mounted) setState(() =>
+        previewError = 'Could not load this page. Retry using the arrow.');
     } finally {
-      if (mounted) setState(() => busy = false);
+      if (mounted) setState(() => previewLoading = false);
     }
   }
 
@@ -214,21 +230,40 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
                 IconButton(
                   key: const Key('conversion-close-preview'),
                   tooltip: 'Close preview',
-                  onPressed: () => setState(() => previewUrl = null),
+                  onPressed: () => setState(() {
+                    previewUrl = null; previewError = '';
+                  }),
                   icon: const Icon(Icons.close)),
                 IconButton(
-                  onPressed: previewPage > 1 && !busy
+                  onPressed: previewPage > 1 && !previewLoading && !busy
                       ? () => _showPreview(previewPage - 1) : null,
                   icon: const Icon(Icons.chevron_left)),
-                Expanded(child: Text('Page $previewPage of $pages',
-                  textAlign: TextAlign.center)),
+                Expanded(child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (previewLoading) ...[
+                      const SizedBox(width: 13, height: 13,
+                        child: CircularProgressIndicator(strokeWidth: 2)),
+                      const SizedBox(width: 7),
+                    ],
+                    Text('Page $previewPage of $pages'),
+                  ],
+                )),
                 IconButton(
-                  onPressed: previewPage < pages && !busy
+                  onPressed: previewPage < pages && !previewLoading && !busy
                       ? () => _showPreview(previewPage + 1) : null,
                   icon: const Icon(Icons.chevron_right)),
               ]),
+              if (previewError.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(previewError, style: TextStyle(
+                    color: Theme.of(context).colorScheme.error)),
+                ),
               Image.network(previewUrl!, fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => const Text('Image expired; reopen preview.')),
+                gaplessPlayback: true,
+                errorBuilder: (context, error, stackTrace) =>
+                  const Text('Image expired; reopen preview.')),
             ],
             const SizedBox(height: 8),
             const Text('The Contributors App prepares pages. Publishing is handled by authorized administrators.'),
