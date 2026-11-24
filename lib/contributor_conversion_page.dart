@@ -158,7 +158,7 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
       body: ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, 35),
         children: [
         Container(padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(color: const Color(0xFF192A3C),
+          decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(11)),
           child: Row(children: [
             for (final step in [(1, '✓ Details'), (2, '2. Prepare PDF'),
@@ -167,17 +167,20 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: step.$1 == 2 ? const Color(0xFF396D89) : Colors.transparent,
+                  color: step.$1 == 2 ? Theme.of(context).colorScheme.primary : Colors.transparent,
                   borderRadius: BorderRadius.circular(8)),
-                child: Text(step.$2, style: const TextStyle(fontSize: 10)))),
+                child: Text(step.$2, style: TextStyle(fontSize: 10,
+                  color: step.$1 == 2 ? Theme.of(context).colorScheme.onPrimary
+                    : Theme.of(context).colorScheme.onSurfaceVariant)))),
           ])),
         const SizedBox(height: 15),
         Text(widget.noteTitle, style: const TextStyle(
           fontSize: 14, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
-        const Text('Prepare protected watermarked WebP pages. The existing '
+        Text('Prepare protected watermarked WebP pages. The existing '
           'PDF fingerprint and page verification checks remain enforced.',
-          style: TextStyle(fontSize: 12, color: Color(0xFFB1C4D6))),
+          style: TextStyle(fontSize: 12,
+            color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: 16),
         if (busy || converting) const LinearProgressIndicator(),
         if (error.isNotEmpty) Padding(
