@@ -54,8 +54,32 @@ class _ContributorsAppState extends State<ContributorsApp> {
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF183C68)),
-      scaffoldBackgroundColor: const Color(0xFFF0F5FA),
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF183C68),
+        brightness: Brightness.light,
+        surface: const Color(0xFFF8FBFF),
+      ).copyWith(
+        primary: const Color(0xFF234C76),
+        onPrimary: Colors.white,
+        surface: const Color(0xFFF8FBFF),
+        onSurface: const Color(0xFF142D43),
+        onSurfaceVariant: const Color(0xFF405B70),
+        outlineVariant: const Color(0xFFA9BED0),
+      ),
+      scaffoldBackgroundColor: Colors.transparent,
+      appBarTheme: const AppBarTheme(backgroundColor: Color(0xEFF8FBFF),
+        foregroundColor: Color(0xFF142D43),
+        surfaceTintColor: Colors.transparent),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: const Color(0xFFF3F8FC),
+        indicatorColor: const Color(0xFFCEE2F2),
+        labelTextStyle: WidgetStateProperty.all(
+          const TextStyle(color: Color(0xFF243E58),
+            fontSize: 12, fontWeight: FontWeight.w700)),
+      ),
+      cardTheme: CardThemeData(color: const Color(0xFFF8FBFF),
+        elevation: 0, shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14))),
       inputDecorationTheme: const InputDecorationTheme(
         border: OutlineInputBorder(),
       ),
@@ -270,16 +294,17 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
         // The title owns only the space remaining after the action icons.
         // Avoid role chips in this narrow app bar: on smaller phones those
         // would overflow into the theme and notification controls.
-        title: const Column(
+        title: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('SMIUNotes',
+            const Text('SMIUNotes',
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
             Text('Contributor workspace',
               maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 10, color: Color(0xFFA8C1D6))),
+              style: TextStyle(fontSize: 10,
+                color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ],
         ),
         actions: [
@@ -338,7 +363,7 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
       ]),
       bottomNavigationBar: authenticated ? NavigationBar(
         height: 65,
-        backgroundColor: const Color(0xFF122234),
+        backgroundColor: Theme.of(context).colorScheme.surface,
         selectedIndex: selected == 1 ? 1 : 0,
         onDestinationSelected: _changeTab,
         destinations: [
@@ -473,8 +498,8 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
               fontSize: 17, fontWeight: FontWeight.w800)),
             Text(profile['student_name']?.toString() ?? 'Contributor',
               maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11,
-                color: Color(0xFF9DB3C9))),
+              style: TextStyle(fontSize: 11,
+                color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ])),
         FilledButton.icon(
           key: const Key('new-draft-shortcut'),
@@ -513,7 +538,7 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
         const Expanded(child: Text('Your notes',
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800))),
         Text('Showing ${notes.length} of ${allNotes.length}',
-          style: const TextStyle(fontSize: 10, color: Color(0xFF9DB3C9))),
+          style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
         IconButton(
           tooltip: 'Refresh workspace',
           onPressed: busy ? null : _refresh,
@@ -590,17 +615,19 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
       title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Text('${subject?['code'] ?? 'Course'} · Sem ${subject?['semester'] ?? '-'}',
-            style: const TextStyle(fontSize: 10, color: Color(0xFFA4CEE8))),
+            style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(width: 7),
           Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
               color: status == 'published'
-                ? const Color(0xFF173E36) : const Color(0xFF334154),
+                ? (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF173E36) : const Color(0xFFD5F3E7))
+                : Theme.of(context).colorScheme.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(8)),
             child: Text(status == 'published' ? 'Published' : 'Draft',
               style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
                 color: status == 'published'
-                  ? const Color(0xFF83DEBC) : const Color(0xFFC5D6E8)))),
+                  ? (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF83DEBC) : const Color(0xFF126244))
+                  : Theme.of(context).colorScheme.onSurface))),
         ]),
         const SizedBox(height: 4),
         Text(note['title']?.toString() ?? 'Untitled',
