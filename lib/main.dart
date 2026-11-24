@@ -687,7 +687,7 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
       const Text('Create a draft', style: TextStyle(
         fontSize: 18, fontWeight: FontWeight.w800)),
       const SizedBox(height: 6),
-      const Text('Add note details first, then upload your PDF. Drafts stay private until published.',
+      Text('Add note details first, then upload your PDF. Drafts stay private until published.',
         style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
       const SizedBox(height: 14),
       if (scope['eligible'] != true)
