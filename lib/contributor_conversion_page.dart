@@ -1,6 +1,8 @@
+import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
 import 'contributor_api.dart';
 import 'contributor_page_converter.dart';
+import 'contributor_preview_cache.dart';
 
 class ContributorConversionPage extends StatefulWidget {
   const ContributorConversionPage({super.key, required this.noteId,
@@ -18,7 +20,14 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
   bool busy = true, converting = false, previewLoading = false;
   int done = 0, total = 0, previewPage = 1;
   String stage = '', error = '', previewError = '';
-  String? previewUrl;
+  Uint8List? previewBytes;
+  ContributorPreviewCache? previewCache;
+
+  @override
+  void dispose() {
+    previewCache?.clear();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -99,7 +108,9 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
     try {
       await converter.reset(widget.noteId);
       if (!mounted) return;
-      setState(() { render = null; previewUrl = null; previewPage = 1;
+      previewCache?.clear();
+      previewCache = null;
+      setState(() { render = null; previewBytes = null; previewPage = 1;
         previewError = ''; previewLoading = false; });
     } catch (_) {
       if (mounted) setState(() => error = 'Reset could not be completed. Retry later.');
@@ -109,38 +120,41 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
   }
 
   Future<void> _showPreview(int page) async {
-    // Keep the existing image and the surrounding page in place while the
-    // next short-lived signed URL is fetched and decoded.
-    if (previewLoading || busy || converting || page < 1) { return; }
-    setState(() { previewLoading = true; previewError = ''; });
+    final pageCount = render?['page_count'] is int
+        ? render!['page_count'] as int : 0;
+    if (previewLoading || busy || converting ||
+        page < 1 || page > pageCount) { return; }
+    final cache = previewCache ??= ContributorPreviewCache(widget.api, widget.noteId);
+    // Keep current page visible while a missing page is fetched; already
+    // cached pages change immediately, with no new signed-URL request.
+    final cached = cache.contains(page);
+    setState(() {
+      previewLoading = !cached;
+      previewError = '';
+    });
     try {
-      final response = await widget.api.request(
-        '/api/mobile/v1/contributor-render',
-        body: {'op': 'preview', 'id': widget.noteId, 'page': page},
-      );
-      final raw = response['url'];
-      final uri = Uri.tryParse(raw is String ? raw : '');
-      if (uri == null || uri.scheme != 'https' ||
-          uri.host.isEmpty || uri.userInfo.isNotEmpty) {
-        throw const FormatException('Invalid preview URL');
+      final bytes = await cache.load(page);
+      if (!mounted || cache != previewCache) { return; }
+      // An image-memory provider bypasses repeated signed-URL fetches.
+      // Decode before replacing the displayed page to avoid flicker.
+      if (!cached) {
+        await precacheImage(MemoryImage(bytes), context);
       }
-      if (!mounted) return;
-      // Decode the new image before switching it in. This avoids a blank
-      // full-screen image flash on Next/Previous. No document is reloaded.
-      await precacheImage(NetworkImage(uri.toString()), context)
-          .timeout(const Duration(seconds: 20));
-      if (!mounted) return;
+      if (!mounted || cache != previewCache) { return; }
       setState(() {
-        previewUrl = uri.toString();
+        previewBytes = bytes;
         previewPage = page;
       });
+      cache.prefetchAdjacent(page, pageCount);
     } catch (_) {
-      if (mounted) {
+      if (mounted && cache == previewCache) {
         setState(() => previewError =
           'Could not load this page. Retry using the arrow.');
       }
     } finally {
-      if (mounted) { setState(() => previewLoading = false); }
+      if (mounted && cache == previewCache) {
+        setState(() => previewLoading = false);
+      }
     }
   }
 
@@ -229,14 +243,15 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
               icon: const Icon(Icons.visibility_outlined),
               label: const Text('Preview watermarked pages'),
             ),
-            if (previewUrl != null) ...[
+            if (previewBytes != null) ...[
               const SizedBox(height: 16),
               Row(children: [
                 IconButton(
                   key: const Key('conversion-close-preview'),
                   tooltip: 'Close preview',
                   onPressed: () => setState(() {
-                    previewUrl = null; previewError = '';
+                    previewCache?.clear(); previewCache = null;
+                    previewBytes = null; previewError = '';
                   }),
                   icon: const Icon(Icons.close)),
                 IconButton(
@@ -274,7 +289,7 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
                 child: ColoredBox(
                   color: Theme.of(context).colorScheme.surfaceContainerLowest,
                   child: Center(
-                    child: Image.network(previewUrl!,
+                    child: Image.memory(previewBytes!,
                       key: ValueKey(previewPage),
                       width: double.infinity,
                       height: double.infinity,
