@@ -177,6 +177,7 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
       final result = await api.workspace();
       if (!mounted) return;
       password.clear();
+      id.clear();
       setState(() { authenticated = true; workspace = result; avatarFuture = null; selected = 0; });
       try {
         final messages = await api.notifications();
@@ -351,29 +352,26 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
       constraints: const BoxConstraints(maxWidth: 430),
       child: ListView(
         shrinkWrap: true,
-        padding: const EdgeInsets.fromLTRB(18, 20, 18, 24),
+        padding: const EdgeInsets.fromLTRB(22, 28, 22, 32),
         children: [
           const Center(child: CircleAvatar(
             radius: 30, backgroundColor: Color(0xFF244A66),
             child: Icon(Icons.folder_shared_outlined,
               color: Color(0xFFB9DEF2), size: 29))),
-          const SizedBox(height: 15),
+          const SizedBox(height: 18),
           const Text('Contributor workspace',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+            style: TextStyle(fontSize: 22, height: 1.22,
+              letterSpacing: -.35, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
           const Text('Sign in with your SMIUNotes Student ID. '
             'Approved contributors and administrators use the same secure workspace.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12, height: 1.5,
               color: Color(0xFF9FB7CB))),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              color: const Color(0xFF17283B),
-              border: Border.all(color: const Color(0xFF2A4357)),
-              borderRadius: BorderRadius.circular(14)),
+          const SizedBox(height: 24),
+          ContributorGlass(
+            padding: const EdgeInsets.all(18),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               const Text('Student ID', style: TextStyle(
                 fontSize: 12, fontWeight: FontWeight.w800)),
@@ -384,9 +382,9 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
                 textCapitalization: TextCapitalization.characters,
                 maxLength: 32,
                 decoration: const InputDecoration(
-                  hintText: 'CSC-26F-027',
+                  hintText: 'Enter your Student ID',
                   prefixIcon: Icon(Icons.badge_outlined, size: 20))),
-              const SizedBox(height: 9),
+              const SizedBox(height: 15),
               const Text('Password', style: TextStyle(
                 fontSize: 12, fontWeight: FontWeight.w800)),
               const SizedBox(height: 6),
@@ -398,7 +396,7 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
                 decoration: const InputDecoration(
                   hintText: 'Your SMIUNotes password',
                   prefixIcon: Icon(Icons.lock_outline, size: 20))),
-              const SizedBox(height: 15),
+              const SizedBox(height: 20),
               FilledButton.icon(
                 key: const Key('contributor-login'),
                 onPressed: busy ? null : _signIn,
@@ -406,7 +404,7 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
                 label: const Text('Sign in to Workspace')),
             ]),
           ),
-          const SizedBox(height: 15),
+          const SizedBox(height: 19),
           const Text('Registration and password recovery remain on '
             'smiunotes.com. Two-factor security verification is required.',
             style: TextStyle(fontSize: 11, height: 1.5,
@@ -433,15 +431,16 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
 
   Widget _scroll(List<Widget> children) => RefreshIndicator(
     onRefresh: _refresh,
-    child: ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
+    child: ListView(padding: const EdgeInsets.fromLTRB(16, 18, 16, 88),
       children: children),
   );
 
   Widget _heading(String title, String detail) => Padding(
-    padding: const EdgeInsets.only(bottom: 20),
+    padding: const EdgeInsets.only(bottom: 18),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(title, style: const TextStyle(
-        fontSize: 25, fontWeight: FontWeight.w800)),
+        fontSize: 22, height: 1.18, letterSpacing: -.4,
+         fontWeight: FontWeight.w800)),
       const SizedBox(height: 5),
       Text(detail, style: TextStyle(
         color: Theme.of(context).colorScheme.onSurfaceVariant)),
@@ -481,7 +480,7 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
           icon: const Icon(Icons.add, size: 16),
           label: const Text('New draft')),
       ]),
-      const SizedBox(height: 13),
+      const SizedBox(height: 16),
       TextField(
         key: const Key('workspace-search'),
         onChanged: (value) => setState(() => notesQuery = value),
@@ -491,7 +490,7 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
           hintText: 'Search by note title or course...',
         ),
       ),
-      const SizedBox(height: 10),
+      const SizedBox(height: 14),
       Row(children: [
         for (final entry in [
           ('all', 'All', counts['total'] ?? allNotes.length),
@@ -507,7 +506,7 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
               onSelected: (_) => setState(() => notesStatus = entry.$1),
             ))),
       ]),
-      const SizedBox(height: 16),
+      const SizedBox(height: 22),
       Row(children: [
         const Expanded(child: Text('Your notes',
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800))),
@@ -730,16 +729,18 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
         ('Semester', scope['semester']?.toString() ?? '-'),
         ('Role', scope['role'] == 'admin' ? 'Administrator' : 'Approved contributor'),
       ])
-        Card(child: ListTile(title: Text(data.$1),
-          subtitle: Text(data.$2))),
-      const SizedBox(height: 12),
-      const Text('Contribution history', style: TextStyle(
-        fontSize: 19, fontWeight: FontWeight.w700)),
-      const SizedBox(height: 8),
-      ..._items('notes').take(10).map(_noteTile),
-      if (_items('notes').isEmpty)
-        const Card(child: ListTile(title: Text('No contributions yet'))),
-      const SizedBox(height: 12),
+        ContributorGlass(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(data.$1.toUpperCase(), style: const TextStyle(
+              fontSize: 10, letterSpacing: 1.05, fontWeight: FontWeight.w700,
+              color: Color(0xFF9FBAD0))),
+            const SizedBox(height: 5),
+            Text(data.$2, style: const TextStyle(
+              fontSize: 14, height: 1.35, fontWeight: FontWeight.w600)),
+          ])),
+      const SizedBox(height: 20),
       OutlinedButton.icon(onPressed: _signOut,
         icon: const Icon(Icons.logout), label: const Text('Sign out')),
     ]);
