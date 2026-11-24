@@ -552,10 +552,23 @@ class _ContributorHomeState extends State<ContributorHome> {
     final scope = workspace?['upload_scope'] as Map<String, dynamic>? ?? {};
     final subjects = _items('subjects');
     return _scroll([
-      _heading('Upload notes', 'Create a private draft for your subject'),
-      Card(child: Padding(padding: const EdgeInsets.all(14),
-        child: Text('Assigned department: ${scope['department'] ?? '-'} · Semester ${scope['semester'] ?? '-'}'))),
-      const SizedBox(height: 12),
+      Row(children: [
+        TextButton.icon(
+          onPressed: () => _changeTab(0),
+          icon: const Icon(Icons.arrow_back, size: 16),
+          label: const Text('Workspace')),
+        const Spacer(),
+        const Chip(label: Text('Step 1 of 3', style: TextStyle(fontSize: 10))),
+      ]),
+      const SizedBox(height: 8),
+      const _ContributorSteps(current: 1, ready: false),
+      const SizedBox(height: 17),
+      const Text('Create a draft', style: TextStyle(
+        fontSize: 18, fontWeight: FontWeight.w800)),
+      const SizedBox(height: 6),
+      const Text('Add note details first, then upload your PDF. Drafts stay private until published.',
+        style: TextStyle(color: Color(0xFFA9BDD0), fontSize: 12)),
+      const SizedBox(height: 14),
       if (scope['eligible'] != true)
         const Card(child: ListTile(
           leading: Icon(Icons.lock_outline),
@@ -579,8 +592,6 @@ class _ContributorHomeState extends State<ContributorHome> {
             }
             if (mounted) _changeTab(0);
           }),
-      const SizedBox(height: 18),
-      const Text('Step 1: Save your draft. Step 2: Open it under Notes and upload the PDF. Step 3: Prepare watermarked pages for review.'),
     ]);
   }
 
@@ -696,6 +707,40 @@ class _ContributorHomeState extends State<ContributorHome> {
   }
 }
 
+class _ContributorSteps extends StatelessWidget {
+  const _ContributorSteps({required this.current, required this.ready});
+  final int current;
+  final bool ready;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(4),
+    decoration: BoxDecoration(
+      color: const Color(0xFF192A3C),
+      borderRadius: BorderRadius.circular(11)),
+    child: Row(children: [
+      for (final step in [
+        (1, '1. Details'), (2, '2. Prepare PDF'), (3, '3. Review'),
+      ])
+        Expanded(child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          decoration: BoxDecoration(
+            color: current == step.$1 ? const Color(0xFF386B87) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8)),
+          alignment: Alignment.center,
+          child: Text(
+            step.$1 < current || (ready && step.$1 <= 2)
+              ? '✓ ${step.$2.substring(3)}' : step.$2,
+            maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 10,
+              color: current == step.$1 ? Colors.white : const Color(0xFFAABDD1),
+              fontWeight: current == step.$1 ? FontWeight.w800 : FontWeight.w500)),
+        )),
+    ]),
+  );
+}
+
 class _DraftComposer extends StatefulWidget {
   const _DraftComposer({required this.subjects, required this.onSave,
     required this.busy});
@@ -739,9 +784,14 @@ class _DraftComposerState extends State<_DraftComposer> {
     }
   }
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        TextField(controller: title, maxLength: 150,
+          decoration: const InputDecoration(labelText: 'Title',
+            hintText: 'e.g. ICT Notes (Lecture 7)')),
+        const SizedBox(height: 10),
+        const Text('Subject', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 5),
         DropdownButtonFormField<String>(
           isExpanded: true,
           initialValue: subject,
@@ -754,18 +804,29 @@ class _DraftComposerState extends State<_DraftComposer> {
           onChanged: (v) => setState(() => subject = v),
         ),
         const SizedBox(height: 12),
-        TextField(controller: title, maxLength: 150,
-          decoration: const InputDecoration(labelText: 'Note title')),
+        Card(child: Padding(padding: const EdgeInsets.all(12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Who can open this note?', style: TextStyle(
+              fontWeight: FontWeight.w700, fontSize: 12)),
+            const SizedBox(height: 8),
+            const Text('Access follows the website’s verified-student rules. '
+              'Private drafts are visible only to their owner and authorized staff.',
+              style: TextStyle(fontSize: 11, color: Color(0xFFA5BED1))),
+          ]))),
         const SizedBox(height: 12),
+        const Text('Description', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 6),
         TextField(controller: description, maxLength: 2000,
           minLines: 3, maxLines: 5,
-          decoration: const InputDecoration(labelText: 'Description')),
+          decoration: const InputDecoration(
+            hintText: 'Topics covered, lecture dates, or exam tips...')),
         if (error != null) Text(error!, style: const TextStyle(color: Colors.red)),
         const SizedBox(height: 12),
-        FilledButton.icon(onPressed: submitting || widget.busy ? null : submit,
-          icon: const Icon(Icons.save_outlined),
-          label: const Text('Create private draft')),
-      ]),
-    ),
+        FilledButton.icon(
+          key: const Key('create-draft-and-continue'),
+          onPressed: submitting || widget.busy ? null : submit,
+          icon: const Icon(Icons.arrow_forward, size: 17),
+          label: Text(submitting ? 'Creating draft...' : 'Create draft & continue to PDF')),
+      ],
   );
 }
