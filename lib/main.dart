@@ -567,8 +567,16 @@ class _ContributorHomeState extends State<ContributorHome> {
       else
         _DraftComposer(subjects: subjects, busy: busy,
           onSave: (title, description, subject) async {
-            await api.createDraft(title, description, subject);
+            final draftId = await api.createDraft(title, description, subject);
             await _refresh();
+            if (!mounted) return;
+            final created = _items('notes').where((n) => n['id'] == draftId).toList();
+            if (created.isNotEmpty) {
+              await Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => ContributorDraftDetailsPage(
+                  api: api, note: created.first,
+                  subjects: _items('subjects'), onChanged: _refresh)));
+            }
             if (mounted) _changeTab(0);
           }),
       const SizedBox(height: 18),
