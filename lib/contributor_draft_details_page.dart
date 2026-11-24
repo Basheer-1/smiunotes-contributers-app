@@ -202,6 +202,7 @@ class _ContributorDraftDetailsPageState
         text: widget.note['description']?.toString() ?? '');
     String? selected = widget.note['subject_id']?.toString();
     bool saving = false;
+    bool verifiedOnly = widget.note['is_sensitive'] == true;
     String? fieldError;
     try {
       await showDialog<void>(
@@ -229,7 +230,15 @@ class _ContributorDraftDetailsPageState
                     decoration: const InputDecoration(labelText: 'Title')),
                 TextField(controller: description, maxLength: 2000,
                     minLines: 2, maxLines: 5,
-                    decoration: const InputDecoration(labelText: 'Description')),
+                    decoration: const InputDecoration(labelText: 'Description (optional)')),
+                CheckboxListTile(
+                  value: verifiedOnly,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Verified students only'),
+                  onChanged: saving ? null : (value) =>
+                    update(() => verifiedOnly = value == true),
+                ),
                 if (fieldError != null)
                   Text(fieldError!, style: TextStyle(
                     color: Theme.of(dialogContext).colorScheme.error)),
@@ -242,13 +251,14 @@ class _ContributorDraftDetailsPageState
               FilledButton(
                 onPressed: saving ? null : () async {
                   final t = title.text.trim(), d = description.text.trim();
-                  if (t.length < 3 || d.length < 3 || selected == null) {
-                    update(() => fieldError = 'Choose a subject and enter a title and description (at least 3 characters).');
+                  if (t.length < 3 || (d.isNotEmpty && d.length < 3) || selected == null) {
+                    update(() => fieldError = 'Choose a subject and enter a title (at least 3 characters).');
                     return;
                   }
                   update(() { saving = true; fieldError = null; });
                   try {
-                    await widget.api.updateDraft(noteId, t, d, selected!);
+                    await widget.api.updateDraft(noteId, t, d, selected!,
+                      verifiedOnly: verifiedOnly);
                     await widget.onChanged();
                     if (dialogContext.mounted) {
                       Navigator.pop(dialogContext);
