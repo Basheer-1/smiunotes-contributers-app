@@ -40,7 +40,7 @@ class ContributorPreviewCache {
     if (_disposed) return;
     for (final next in [page + 1, page - 1]) {
       if (next < 1 || next > pageCount ||
-          _pages.containsKey(next) || _pending.containsKey(next)) continue;
+          _pages.containsKey(next) || _pending.containsKey(next)) { continue; }
       unawaited(load(next).catchError((Object _) =>
           Uint8List(0)));
     }
