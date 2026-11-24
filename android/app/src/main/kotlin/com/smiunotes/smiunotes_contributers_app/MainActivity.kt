@@ -1,11 +1,13 @@
 package com.smiunotes.smiunotes_contributers_app
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.pdf.PdfRenderer
-import android.os.Build
 import android.os.ParcelFileDescriptor
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -25,9 +27,30 @@ class MainActivity : FlutterActivity() {
     private val executor = Executors.newSingleThreadExecutor()
     private val channelName = "com.smiunotes.contributors/pdf_renderer"
     private val cachePrefix = "smiunotes-page-"
+    private val notificationPermissionRequest = 7240
+    private var permissionResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
+            "smiunotes/contributor_notifications")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "requestPermission") {
+                    result.notImplemented()
+                } else if (Build.VERSION.SDK_INT < 33 ||
+                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+                    PackageManager.PERMISSION_GRANTED) {
+                    result.success(true)
+                } else if (permissionResult != null) {
+                    result.error("BUSY", "Notification permission prompt already open.", null)
+                } else {
+                    permissionResult = result
+                    requestPermissions(
+                        arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                        notificationPermissionRequest
+                    )
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -84,6 +107,17 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != notificationPermissionRequest) return
+        val callback = permissionResult ?: return
+        permissionResult = null
+        callback.success(grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED)
     }
 
     private fun checkedPdf(path: String?): File {
