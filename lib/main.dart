@@ -341,7 +341,7 @@ class _ContributorHomeState extends State<ContributorHome> {
 
   Widget _scroll(List<Widget> children) => RefreshIndicator(
     onRefresh: _refresh,
-    child: ListView(padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+    child: ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
       children: children),
   );
 
@@ -371,27 +371,79 @@ class _ContributorHomeState extends State<ContributorHome> {
   Widget _dashboard() {
     final profile = workspace?['profile'] as Map<String, dynamic>? ?? {};
     final counts = workspace?['counts'] as Map<String, dynamic>? ?? {};
-    final notes = _items('notes');
+    final allNotes = _items('notes');
+    final query = notesQuery.trim().toLowerCase();
+    final notes = allNotes.where((note) {
+      final status = note['status']?.toString() ?? 'draft';
+      if (notesStatus != 'all' && notesStatus != status) return false;
+      if (query.isEmpty) return true;
+      final subject = _items('subjects').where(
+        (s) => s['id'] == note['subject_id']).toList();
+      final course = subject.isEmpty ? '' :
+        "${subject.first['code'] ?? ''} ${subject.first['name'] ?? ''}";
+      return '${note['title'] ?? ''} ${note['description'] ?? ''} $course'
+        .toLowerCase().contains(query);
+    }).toList();
     return _scroll([
-      _heading('Your dashboard', 'Welcome, ${profile['student_name'] ?? 'Contributor'}'),
       Row(children: [
-        Expanded(child: _stat('Total notes', counts['total'] ?? 0, Icons.library_books_outlined)),
-        Expanded(child: _stat('Drafts', counts['drafts'] ?? 0, Icons.edit_note_outlined)),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Staff workspace', style: TextStyle(
+              fontSize: 17, fontWeight: FontWeight.w800)),
+            Text(profile['student_name']?.toString() ?? 'Contributor',
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11,
+                color: Color(0xFF9DB3C9))),
+          ])),
+        FilledButton.icon(
+          key: const Key('new-draft-shortcut'),
+          onPressed: () => _changeTab(1),
+          icon: const Icon(Icons.add, size: 16),
+          label: const Text('New draft')),
       ]),
+      const SizedBox(height: 13),
+      TextField(
+        key: const Key('workspace-search'),
+        onChanged: (value) => setState(() => notesQuery = value),
+        decoration: const InputDecoration(
+          isDense: true,
+          prefixIcon: Icon(Icons.search, size: 18),
+          hintText: 'Search by note title or course...',
+        ),
+      ),
+      const SizedBox(height: 10),
       Row(children: [
-        Expanded(child: _stat('Published', counts['published'] ?? 0, Icons.check_circle_outline)),
-        Expanded(child: Card(child: ListTile(
-          title: const Text('New draft'),
-          subtitle: const Text('Start contributing'),
-          onTap: () => _changeTab(1),
-          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        ))),
+        for (final entry in [
+          ('all', 'All', counts['total'] ?? allNotes.length),
+          ('draft', 'Drafts', counts['drafts'] ?? 0),
+          ('published', 'Published', counts['published'] ?? 0),
+        ])
+          Expanded(child: Padding(padding: const EdgeInsets.only(right: 4),
+            child: ChoiceChip(
+              key: Key('workspace-filter-${entry.$1}'),
+              label: Text('${entry.$2} (${entry.$3})',
+                style: const TextStyle(fontSize: 10)),
+              selected: notesStatus == entry.$1,
+              onSelected: (_) => setState(() => notesStatus = entry.$1),
+            ))),
       ]),
-      const SizedBox(height: 14),
-      const Text('Recent activity', style: TextStyle(fontSize: 19,
-        fontWeight: FontWeight.w700)),
-      ...notes.take(5).map(_noteTile),
-      if (notes.isEmpty) const ListTile(title: Text('No contributions yet')),
+      const SizedBox(height: 16),
+      Row(children: [
+        const Expanded(child: Text('Your notes',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800))),
+        Text('Showing ${notes.length} of ${allNotes.length}',
+          style: const TextStyle(fontSize: 10, color: Color(0xFF9DB3C9))),
+        IconButton(
+          tooltip: 'Refresh workspace',
+          onPressed: busy ? null : _refresh,
+          icon: const Icon(Icons.refresh_rounded, size: 18)),
+      ]),
+      const SizedBox(height: 5),
+      if (notes.isEmpty) Card(child: ListTile(
+        title: Text(allNotes.isEmpty ? 'No contributions yet' : 'No matching notes'),
+        subtitle: const Text('Create a draft or adjust your filters.')))
+      else
+        ...notes.map(_noteTile),
     ]);
   }
 
@@ -445,13 +497,42 @@ class _ContributorHomeState extends State<ContributorHome> {
   Widget _noteTile(Map<String, dynamic> note) {
     final status = note['status']?.toString() ?? 'draft';
     final colors = Theme.of(context).colorScheme;
-    return Card(child: ListTile(
-      leading: Icon(status == 'published'
-          ? Icons.check_circle_outline : Icons.description_outlined,
-          color: colors.primary),
-      title: Text(note['title']?.toString() ?? 'Untitled'),
-      subtitle: Text('${status.toUpperCase()} · ${note['updated_at']?.toString().split('T').first ?? ''}'),
-      trailing: const Icon(Icons.chevron_right),
+    final subjectMatches = _items('subjects').where(
+      (item) => item['id'] == note['subject_id']).toList();
+    final subject = subjectMatches.isEmpty ? null : subjectMatches.first;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 3),
+      color: const Color(0xFF18293B),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10),
+        side: const BorderSide(color: Color(0xFF2B4055))),
+      child: ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text('${subject?['code'] ?? 'Course'} · Sem ${subject?['semester'] ?? '-'}',
+            style: const TextStyle(fontSize: 10, color: Color(0xFFA4CEE8))),
+          const SizedBox(width: 7),
+          Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: status == 'published'
+                ? const Color(0xFF173E36) : const Color(0xFF334154),
+              borderRadius: BorderRadius.circular(8)),
+            child: Text(status == 'published' ? 'Published' : 'Draft',
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
+                color: status == 'published'
+                  ? const Color(0xFF83DEBC) : const Color(0xFFC5D6E8)))),
+        ]),
+        const SizedBox(height: 4),
+        Text(note['title']?.toString() ?? 'Untitled',
+          maxLines: 2, overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+      ]),
+      subtitle: Text(
+        '${subject?['name'] ?? ''} · ${note['updated_at']?.toString().split('T').first ?? ''}',
+        maxLines: 1, overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 10)),
+      trailing: const Icon(Icons.chevron_right, size: 17),
       onTap: () async {
         await Navigator.of(context).push(MaterialPageRoute<void>(
           builder: (_) => ContributorDraftDetailsPage(
