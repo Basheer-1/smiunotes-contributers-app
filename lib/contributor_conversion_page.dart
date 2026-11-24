@@ -132,12 +132,34 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
     final pages = render?['page_count'] is int
         ? render!['page_count'] as int : 0;
     return Scaffold(
-      appBar: AppBar(title: const Text('Prepare PDF pages')),
-      body: ListView(padding: const EdgeInsets.all(20), children: [
+      appBar: AppBar(
+        title: const Text('Workspace', style: TextStyle(fontSize: 14)),
+        actions: [Chip(label: const Text('Step 2 of 3',
+          style: TextStyle(fontSize: 10)))],
+      ),
+      body: ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, 35),
+        children: [
+        Container(padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(color: const Color(0xFF192A3C),
+            borderRadius: BorderRadius.circular(11)),
+          child: Row(children: [
+            for (final step in [(1, '✓ Details'), (2, '2. Prepare PDF'),
+                                (3, '3. Review')])
+              Expanded(child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: step.$1 == 2 ? const Color(0xFF396D89) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8)),
+                child: Text(step.$2, style: const TextStyle(fontSize: 10)))),
+          ])),
+        const SizedBox(height: 15),
         Text(widget.noteTitle, style: const TextStyle(
-          fontSize: 23, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 12),
-        const Text('Convert your uploaded original PDF into private, watermarked WebP pages. This must finish before an administrator can publish the note.'),
+          fontSize: 14, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        const Text('Prepare protected watermarked WebP pages. The existing '
+          'PDF fingerprint and page verification checks remain enforced.',
+          style: TextStyle(fontSize: 12, color: Color(0xFFB1C4D6))),
         const SizedBox(height: 16),
         if (busy || converting) const LinearProgressIndicator(),
         if (error.isNotEmpty) Padding(
@@ -160,7 +182,7 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
           FilledButton.icon(
             onPressed: busy ? null : _prepare,
             icon: const Icon(Icons.auto_fix_high),
-            label: const Text('Select the same PDF and prepare pages'),
+            label: const Text('Prepare pages for publishing →'),
           ),
           const SizedBox(height: 8),
           const Text('Choose the same original PDF from your phone. A SHA-256 fingerprint is checked against the uploaded document before finalization.'),
@@ -169,7 +191,7 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
           Card(child: ListTile(
             leading: Icon(status == 'ready' ? Icons.verified_outlined
                 : Icons.pending_actions_outlined),
-            title: Text(status == 'ready' ? 'Pages ready for admin review'
+            title: Text(status == 'ready' ? 'Watermarked pages ready for review'
               : 'Conversion status: $status'),
             subtitle: Text('$pages pages'),
           )),
@@ -198,7 +220,7 @@ class _ContributorConversionPageState extends State<ContributorConversionPage> {
                 errorBuilder: (context, error, stackTrace) => const Text('Image expired; reopen preview.')),
             ],
             const SizedBox(height: 8),
-            const Text('Only administrators can approve and publish notes.'),
+            const Text('The Contributors App prepares pages. Publishing is handled by authorized administrators.'),
           ],
           const SizedBox(height: 10),
           OutlinedButton.icon(
