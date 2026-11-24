@@ -688,7 +688,7 @@ class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingOb
         fontSize: 18, fontWeight: FontWeight.w800)),
       const SizedBox(height: 6),
       const Text('Add note details first, then upload your PDF. Drafts stay private until published.',
-        style: TextStyle(color: Color(0xFFA9BDD0), fontSize: 12)),
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
       const SizedBox(height: 14),
       if (scope['eligible'] != true)
         const Card(child: ListTile(
@@ -866,7 +866,7 @@ class _ContributorSteps extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(4),
     decoration: BoxDecoration(
-      color: const Color(0xFF192A3C),
+      color: Theme.of(context).colorScheme.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(11)),
     child: Row(children: [
       for (final step in [
@@ -876,7 +876,7 @@ class _ContributorSteps extends StatelessWidget {
           margin: const EdgeInsets.symmetric(horizontal: 2),
           padding: const EdgeInsets.symmetric(vertical: 7),
           decoration: BoxDecoration(
-            color: current == step.$1 ? const Color(0xFF386B87) : Colors.transparent,
+            color: current == step.$1 ? Theme.of(context).colorScheme.primary : Colors.transparent,
             borderRadius: BorderRadius.circular(8)),
           alignment: Alignment.center,
           child: Text(
@@ -884,7 +884,7 @@ class _ContributorSteps extends StatelessWidget {
               ? '✓ ${step.$2.substring(3)}' : step.$2,
             maxLines: 1, overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 10,
-              color: current == step.$1 ? Colors.white : const Color(0xFFAABDD1),
+              color: current == step.$1 ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurfaceVariant,
               fontWeight: current == step.$1 ? FontWeight.w800 : FontWeight.w500)),
         )),
     ]),
