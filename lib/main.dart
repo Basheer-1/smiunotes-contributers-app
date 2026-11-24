@@ -101,7 +101,7 @@ class ContributorHome extends StatefulWidget {
   State<ContributorHome> createState() => _ContributorHomeState();
 }
 
-class _ContributorHomeState extends State<ContributorHome> {
+class _ContributorHomeState extends State<ContributorHome> with WidgetsBindingObserver {
   final api = ContributorApi();
   bool restoring = true, busy = false, authenticated = false;
   int selected = 0;
@@ -116,14 +116,23 @@ class _ContributorHomeState extends State<ContributorHome> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _restore();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     id.dispose();
     password.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && authenticated && !busy) {
+      _refresh();
+    }
   }
 
   Future<void> _restore() async {
@@ -157,6 +166,10 @@ class _ContributorHomeState extends State<ContributorHome> {
       if (!mounted) return;
       password.clear();
       setState(() { authenticated = true; workspace = result; avatarFuture = null; selected = 0; });
+      try {
+        final messages = await api.notifications();
+        if (mounted) setState(() => inbox = messages);
+      } catch (_) { /* Workspace is available even when inbox is offline. */ }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -182,7 +195,9 @@ class _ContributorHomeState extends State<ContributorHome> {
     try {
       final result = await api.workspace();
       Map<String, dynamic>? messages;
-      if (selected == 4) messages = await api.notifications();
+      try {
+        messages = await api.notifications();
+      } catch (_) { /* Preserve notes when inbox cannot be reached. */ }
       if (mounted) setState(() { workspace = result; if (messages != null) inbox = messages; });
     } catch (e) {
       if (mounted) setState(() => error = _safeError(e));
@@ -267,7 +282,10 @@ class _ContributorHomeState extends State<ContributorHome> {
           if (authenticated) IconButton(
             key: const Key('contributor-header-notifications'),
             tooltip: 'Notifications', onPressed: () => _changeTab(4),
-            icon: const Icon(Icons.notifications_none_rounded, size: 20)),
+            icon: (inbox?['unread'] is int && (inbox!['unread'] as int) > 0)
+              ? Badge.count(count: (inbox!['unread'] as int).clamp(1, 99),
+                  child: const Icon(Icons.notifications_none_rounded, size: 20))
+              : const Icon(Icons.notifications_none_rounded, size: 20)),
           if (authenticated) InkWell(
             key: const Key('contributor-header-avatar'),
             onTap: _openProfile,
