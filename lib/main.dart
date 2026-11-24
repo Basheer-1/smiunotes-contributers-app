@@ -5,6 +5,7 @@ import 'contributor_avatar.dart';
 import 'contributor_api.dart';
 import 'contributor_challenge.dart';
 import 'contributor_draft_details_page.dart';
+import 'contributor_glass.dart';
 
 void main() => runApp(const ContributorsApp());
 
@@ -66,8 +67,8 @@ class _ContributorsAppState extends State<ContributorsApp> {
         brightness: Brightness.dark,
         surface: const Color(0xFF101B29),
       ).copyWith(
-        primary: const Color(0xFF8EC5FF),
-        onPrimary: const Color(0xFF09213C),
+        primary: const Color(0xFF79B5D1),
+        onPrimary: const Color(0xFF071B2A),
         primaryContainer: const Color(0xFF18395B),
         onPrimaryContainer: const Color(0xFFD9EAFD),
         secondary: const Color(0xFFACD7F7),
@@ -76,7 +77,9 @@ class _ContributorsAppState extends State<ContributorsApp> {
         onSurfaceVariant: const Color(0xFFB7C9DE),
         outlineVariant: const Color(0xFF324862),
       ),
-      scaffoldBackgroundColor: const Color(0xFF0D1723),
+      scaffoldBackgroundColor: const Color(0xFF0B1725),
+      cardTheme: CardThemeData(color: const Color(0xE21A2B3D), elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
       inputDecorationTheme: const InputDecorationTheme(
         border: OutlineInputBorder(),
       ),
@@ -546,11 +549,10 @@ class _ContributorHomeState extends State<ContributorHome> {
     final subjectMatches = _items('subjects').where(
       (item) => item['id'] == note['subject_id']).toList();
     final subject = subjectMatches.isEmpty ? null : subjectMatches.first;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 3),
-      color: const Color(0xFF18293B),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10),
-        side: const BorderSide(color: Color(0xFF2B4055))),
+    return ContributorGlass(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: EdgeInsets.zero,
+      radius: 12,
       child: ListTile(
       dense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -880,7 +882,7 @@ class _DraftComposerState extends State<_DraftComposer> {
           onChanged: (v) => setState(() => subject = v),
         ),
         const SizedBox(height: 12),
-        Card(child: Padding(padding: const EdgeInsets.all(10),
+        ContributorGlass(padding: const EdgeInsets.all(10),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Who can open this note?', style: TextStyle(
               fontWeight: FontWeight.w800, fontSize: 12)),
@@ -898,7 +900,7 @@ class _DraftComposerState extends State<_DraftComposer> {
                 'can open the published pages. Private drafts stay restricted.',
                 style: TextStyle(fontSize: 11)),
             ),
-          ]))),
+          ])),
         const SizedBox(height: 12),
         const Text('Description (optional)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
