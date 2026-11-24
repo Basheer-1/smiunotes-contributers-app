@@ -626,8 +626,9 @@ class _ContributorHomeState extends State<ContributorHome> {
         const Card(child: ListTile(title: Text('No subjects available in your semester')))
       else
         _DraftComposer(subjects: subjects, busy: busy,
-          onSave: (title, description, subject) async {
-            final draftId = await api.createDraft(title, description, subject);
+          onSave: (title, description, subject, verifiedOnly) async {
+            final draftId = await api.createDraft(title, description, subject,
+              verifiedOnly: verifiedOnly);
             await _refresh();
             if (!mounted) return;
             final created = _items('notes').where((n) => n['id'] == draftId).toList();
@@ -819,7 +820,7 @@ class _DraftComposer extends StatefulWidget {
     required this.busy});
   final List<Map<String, dynamic>> subjects;
   final bool busy;
-  final Future<void> Function(String, String, String) onSave;
+  final Future<void> Function(String, String, String, bool) onSave;
   @override
   State<_DraftComposer> createState() => _DraftComposerState();
 }
@@ -828,6 +829,7 @@ class _DraftComposerState extends State<_DraftComposer> {
   late final TextEditingController title, description;
   String? subject, error;
   bool submitting = false;
+  bool verifiedOnly = false;
   @override
   void initState() {
     super.initState();
@@ -842,14 +844,15 @@ class _DraftComposerState extends State<_DraftComposer> {
   }
   Future<void> submit() async {
     if (submitting) return;
-    if (title.text.trim().length < 3 || description.text.trim().length < 3 ||
+    if (title.text.trim().length < 3 ||
+        (description.text.trim().isNotEmpty && description.text.trim().length < 3) ||
         subject == null) {
-      setState(() => error = 'Enter title, description, and subject.');
+      setState(() => error = 'Select a subject and enter a title. Description is optional.');
       return;
     }
     setState(() { submitting = true; error = null; });
     try {
-      await widget.onSave(title.text.trim(), description.text.trim(), subject!);
+      await widget.onSave(title.text.trim(), description.text.trim(), subject!, verifiedOnly);
     } catch (_) {
       if (mounted) setState(() => error = 'Unable to create draft. Please retry.');
     } finally {
@@ -868,7 +871,7 @@ class _DraftComposerState extends State<_DraftComposer> {
         DropdownButtonFormField<String>(
           isExpanded: true,
           initialValue: subject,
-          decoration: const InputDecoration(labelText: 'Subject'),
+          decoration: const InputDecoration(hintText: 'Select a subject', isDense: true),
           items: widget.subjects.map((s) => DropdownMenuItem(
             value: s['id'] as String,
             child: Text('${s['code']} · ${s['name']}',
@@ -877,17 +880,27 @@ class _DraftComposerState extends State<_DraftComposer> {
           onChanged: (v) => setState(() => subject = v),
         ),
         const SizedBox(height: 12),
-        Card(child: Padding(padding: const EdgeInsets.all(12),
+        Card(child: Padding(padding: const EdgeInsets.all(10),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Who can open this note?', style: TextStyle(
-              fontWeight: FontWeight.w700, fontSize: 12)),
-            const SizedBox(height: 8),
-            const Text('Access follows the website’s verified-student rules. '
-              'Private drafts are visible only to their owner and authorized staff.',
-              style: TextStyle(fontSize: 11, color: Color(0xFFA5BED1))),
+              fontWeight: FontWeight.w800, fontSize: 12)),
+            CheckboxListTile(
+              key: const Key('verified-students-checkbox'),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              dense: true,
+              value: verifiedOnly,
+              onChanged: submitting ? null : (value) =>
+                setState(() => verifiedOnly = value == true),
+              title: const Text('Verified students only',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              subtitle: const Text('Only Student Card-approved SMIU accounts '
+                'can open the published pages. Private drafts stay restricted.',
+                style: TextStyle(fontSize: 11)),
+            ),
           ]))),
         const SizedBox(height: 12),
-        const Text('Description', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+        const Text('Description (optional)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
         TextField(controller: description, maxLength: 2000,
           minLines: 3, maxLines: 5,
