@@ -295,31 +295,69 @@ class _ContributorHomeState extends State<ContributorHome> {
   Widget _loginBody() => Center(
     child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 430),
-      child: ListView(shrinkWrap: true,
-        padding: const EdgeInsets.all(24),
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(18, 20, 18, 24),
         children: [
-          const Icon(Icons.verified_user_outlined, size: 56),
+          const Center(child: CircleAvatar(
+            radius: 30, backgroundColor: Color(0xFF244A66),
+            child: Icon(Icons.folder_shared_outlined,
+              color: Color(0xFFB9DEF2), size: 29))),
+          const SizedBox(height: 15),
+          const Text('Contributor workspace',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          const Text('Sign in with your SMIUNotes Student ID. '
+            'Approved contributors and administrators use the same secure workspace.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, height: 1.5,
+              color: Color(0xFF9FB7CB))),
           const SizedBox(height: 20),
-          const Text('Contributor sign in', textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const Text('Approved contributors and administrators. Both open the same Contributor Workspace using their SMIUNotes Student ID and password.',
+          Container(
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+              color: const Color(0xFF17283B),
+              border: Border.all(color: const Color(0xFF2A4357)),
+              borderRadius: BorderRadius.circular(14)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              const Text('Student ID', style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              TextField(
+                key: const Key('contributor-student-id'),
+                controller: id,
+                textCapitalization: TextCapitalization.characters,
+                maxLength: 32,
+                decoration: const InputDecoration(
+                  hintText: 'CSC-26F-027',
+                  prefixIcon: Icon(Icons.badge_outlined, size: 20))),
+              const SizedBox(height: 9),
+              const Text('Password', style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              TextField(
+                key: const Key('contributor-password'),
+                controller: password,
+                obscureText: true,
+                onSubmitted: (_) => _signIn(),
+                decoration: const InputDecoration(
+                  hintText: 'Your SMIUNotes password',
+                  prefixIcon: Icon(Icons.lock_outline, size: 20))),
+              const SizedBox(height: 15),
+              FilledButton.icon(
+                key: const Key('contributor-login'),
+                onPressed: busy ? null : _signIn,
+                icon: const Icon(Icons.login_rounded, size: 18),
+                label: const Text('Sign in to Workspace')),
+            ]),
+          ),
+          const SizedBox(height: 15),
+          const Text('Registration and password recovery remain on '
+            'smiunotes.com. Two-factor security verification is required.',
+            style: TextStyle(fontSize: 11, height: 1.5,
+              color: Color(0xFF94AABF)),
             textAlign: TextAlign.center),
-          const SizedBox(height: 25),
-          TextField(controller: id, textCapitalization: TextCapitalization.characters,
-            maxLength: 32, decoration: const InputDecoration(
-              labelText: 'Student ID', prefixIcon: Icon(Icons.badge_outlined))),
-          const SizedBox(height: 12),
-          TextField(controller: password, obscureText: true,
-            onSubmitted: (_) => _signIn(),
-            decoration: const InputDecoration(
-              labelText: 'Password', prefixIcon: Icon(Icons.lock_outline))),
-          const SizedBox(height: 20),
-          FilledButton.icon(onPressed: busy ? null : _signIn,
-            icon: const Icon(Icons.login), label: const Text('Sign in')),
-          const SizedBox(height: 12),
-          const Text('Registration and password recovery remain on smiunotes.com.',
-            textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
         ],
       ),
     ),
