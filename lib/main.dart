@@ -9,12 +9,8 @@ import 'contributor_draft_details_page.dart';
 void main() => runApp(const ContributorsApp());
 
 const blue = Color(0xFF1F527E);
-const labels = ['Dashboard', 'Upload', 'Notes', 'Profile', 'Inbox'];
-const icons = [
-  Icons.dashboard_outlined, Icons.upload_file_outlined,
-  Icons.folder_copy_outlined, Icons.person_outline,
-  Icons.notifications_none,
-];
+const labels = ['Workspace', 'New Draft'];
+const icons = [Icons.folder_open_rounded, Icons.add_circle_outline_rounded];
 
 class ContributorsApp extends StatefulWidget {
   const ContributorsApp({super.key});
@@ -26,7 +22,7 @@ class ContributorsApp extends StatefulWidget {
 class _ContributorsAppState extends State<ContributorsApp> {
   static const _vault = FlutterSecureStorage();
   static const _themeKey = 'smiunotes.theme.v1';
-  bool darkMode = false;
+  bool darkMode = true;
 
   @override
   void initState() {
@@ -68,19 +64,19 @@ class _ContributorsAppState extends State<ContributorsApp> {
       colorScheme: ColorScheme.fromSeed(
         seedColor: const Color(0xFF87B9F8),
         brightness: Brightness.dark,
-        surface: const Color(0xFF101E32),
+        surface: const Color(0xFF101B29),
       ).copyWith(
         primary: const Color(0xFF8EC5FF),
         onPrimary: const Color(0xFF09213C),
         primaryContainer: const Color(0xFF18395B),
         onPrimaryContainer: const Color(0xFFD9EAFD),
         secondary: const Color(0xFFACD7F7),
-        surface: const Color(0xFF101E32),
+        surface: const Color(0xFF101B29),
         onSurface: const Color(0xFFEAF3FF),
         onSurfaceVariant: const Color(0xFFB7C9DE),
         outlineVariant: const Color(0xFF324862),
       ),
-      scaffoldBackgroundColor: const Color(0xFF081321),
+      scaffoldBackgroundColor: const Color(0xFF0D1723),
       inputDecorationTheme: const InputDecorationTheme(
         border: OutlineInputBorder(),
       ),
@@ -193,7 +189,7 @@ class _ContributorHomeState extends State<ContributorHome> {
   }
 
   Future<void> _changeTab(int index) async {
-    if (!authenticated || index < 0 || index >= labels.length) return;
+    if (!authenticated || index < 0 || index > 4) return;
     setState(() => selected = index);
     // Refresh from the shared website backend whenever a tab is visited.
     // This avoids requiring a full app restart after a new note is published.
@@ -238,31 +234,39 @@ class _ContributorHomeState extends State<ContributorHome> {
     }
     return Scaffold(
       appBar: AppBar(
-        title: const Row(children: [
-          Icon(Icons.auto_stories_rounded),
-          SizedBox(width: 10),
-          Expanded(child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('SMIUNotes', style: TextStyle(
-                  fontSize: 20, fontWeight: FontWeight.w800)),
-              Text('Contributors', style: TextStyle(fontSize: 11)),
-            ],
-          )),
+        toolbarHeight: 53,
+        titleSpacing: 12,
+        title: Row(children: [
+          const Text('SMIU', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+          const Text('Contributor', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+          const SizedBox(width: 8),
+          if (authenticated) Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(color: const Color(0xFF192D40),
+              borderRadius: BorderRadius.circular(12)),
+            child: Text(((workspace?['upload_scope'] as Map?)?['role'] ?? 'Staff')
+              .toString().toUpperCase(),
+              style: const TextStyle(fontSize: 9, color: Color(0xFFA3CDE5))),
+          ),
         ]),
         actions: [
           IconButton(
             tooltip: widget.darkMode ? 'Switch to light theme' : 'Switch to dark theme',
             onPressed: widget.onThemeToggle,
             icon: Icon(widget.darkMode ? Icons.light_mode_outlined
-                : Icons.dark_mode_outlined),
+                : Icons.dark_mode_outlined, size: 19),
           ),
-          if (authenticated)
-            IconButton(tooltip: 'Refresh', onPressed: busy ? null : _refresh,
-                icon: const Icon(Icons.refresh)),
-          if (authenticated)
-            IconButton(tooltip: 'Sign out', onPressed: busy ? null : _signOut,
-                icon: const Icon(Icons.logout)),
+          if (authenticated) IconButton(
+            key: const Key('contributor-header-notifications'),
+            tooltip: 'Notifications', onPressed: () => _changeTab(4),
+            icon: const Icon(Icons.notifications_none_rounded, size: 20)),
+          if (authenticated) InkWell(
+            key: const Key('contributor-header-avatar'),
+            onTap: () => _changeTab(3),
+            child: const Padding(padding: EdgeInsets.symmetric(horizontal: 10),
+              child: CircleAvatar(radius: 15, backgroundColor: Color(0xFF386D89),
+                child: Icon(Icons.person_outline, size: 17))),
+          ),
         ],
       ),
       body: Column(children: [
@@ -276,11 +280,13 @@ class _ContributorHomeState extends State<ContributorHome> {
         Expanded(child: authenticated ? _workspaceBody() : _loginBody()),
       ]),
       bottomNavigationBar: authenticated ? NavigationBar(
-        selectedIndex: selected,
+        height: 65,
+        backgroundColor: const Color(0xFF122234),
+        selectedIndex: selected == 1 ? 1 : 0,
         onDestinationSelected: _changeTab,
         destinations: [
           for (var i = 0; i < labels.length; i++)
-            NavigationDestination(icon: Icon(icons[i]), label: labels[i]),
+            NavigationDestination(icon: Icon(icons[i], size: 20), label: labels[i]),
         ],
       ) : null,
     );
@@ -483,7 +489,7 @@ class _ContributorHomeState extends State<ContributorHome> {
           onSave: (title, description, subject) async {
             await api.createDraft(title, description, subject);
             await _refresh();
-            if (mounted) _changeTab(2);
+            if (mounted) _changeTab(0);
           }),
       const SizedBox(height: 18),
       const Text('Step 1: Save your draft. Step 2: Open it under Notes and upload the PDF. Step 3: Prepare watermarked pages for review.'),
